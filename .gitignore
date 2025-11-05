@@ -1,0 +1,57 @@
+# Admin Panel
+admin-panel/node_modules/
+admin-panel/.next/
+admin-panel/out/
+admin-panel/.env.local
+admin-panel/.env*.local
+admin-panel/npm-debug.log*
+admin-panel/yarn-debug.log*
+admin-panel/yarn-error.log*
+
+# Student App
+student-app/node_modules/
+student-app/.next/
+student-app/out/
+student-app/.env.local
+student-app/.env*.local
+student-app/npm-debug.log*
+student-app/yarn-debug.log*
+student-app/yarn-error.log*
+
+# Flutter
+mobile-app/.dart_tool/
+mobile-app/.flutter-plugins
+mobile-app/.flutter-plugins-dependencies
+mobile-app/.packages
+mobile-app/.pub-cache/
+mobile-app/.pub/
+mobile-app/build/
+mobile-app/*.g.dart
+mobile-app/*.freezed.dart
+mobile-app/ios/Pods/
+mobile-app/ios/.symlinks/
+mobile-app/ios/Flutter/Flutter.framework
+mobile-app/ios/Flutter/Flutter.podspec
+mobile-app/ios/.generated/
+mobile-app/android/.gradle
+mobile-app/android/captures/
+mobile-app/android/gradlew
+mobile-app/android/gradlew.bat
+mobile-app/android/local.properties
+mobile-app/android/**/GeneratedPluginRegistrant.java
+mobile-app/android/key.properties
+mobile-app/*.jks
+
+# Supabase
+.env
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Logs
+*.log
