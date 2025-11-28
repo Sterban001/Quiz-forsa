@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { createClient } from '@/lib/supabase/client'
+import { apiClient } from '@/lib/api/client'
 import { useRouter } from 'next/navigation'
 
 export default function LoginPage() {
@@ -13,7 +13,6 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState('')
   const router = useRouter()
-  const supabase = createClient()
 
   const handlePasswordLogin = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -21,36 +20,14 @@ export default function LoginPage() {
     setMessage('')
 
     try {
-      // Try to sign in first
-      const { error: signInError, data: signInData } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      })
+      await apiClient.login(email, password)
 
-      if (signInError && signInError.message.includes('Invalid login credentials')) {
-        // User doesn't exist, create account
-        const { error: signUpError, data: signUpData } = await supabase.auth.signUp({
-          email,
-          password,
-          options: {
-            emailRedirectTo: `${window.location.origin}/api/auth/callback`,
-          },
-        })
-
-        if (signUpError) throw signUpError
-
-        // Account created, redirect to dashboard
-        router.push('/dashboard')
-        router.refresh()
-      } else if (signInError) {
-        throw signInError
-      } else {
-        // Successfully signed in
-        router.push('/dashboard')
-        router.refresh()
-      }
+      // Successfully logged in
+      router.push('/dashboard')
+      router.refresh()
     } catch (error: any) {
       setMessage(error.message || 'Error logging in')
+    } finally {
       setLoading(false)
     }
   }
@@ -61,15 +38,7 @@ export default function LoginPage() {
     setMessage('')
 
     try {
-      const { error } = await supabase.auth.signInWithOtp({
-        email,
-        options: {
-          shouldCreateUser: true,
-        },
-      })
-
-      if (error) throw error
-
+      await apiClient.sendOtp(email)
       setMessage('OTP sent! Check your email.')
       setStep('otp')
     } catch (error: any) {
@@ -85,13 +54,7 @@ export default function LoginPage() {
     setMessage('')
 
     try {
-      const { data, error } = await supabase.auth.verifyOtp({
-        email,
-        token: otp,
-        type: 'email',
-      })
-
-      if (error) throw error
+      await apiClient.verifyOtp(email, otp)
 
       // Successfully verified, redirect to dashboard
       router.push('/dashboard')

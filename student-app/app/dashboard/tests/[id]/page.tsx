@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { createClient } from '@/lib/supabase/client'
+import { apiClient } from '@/lib/api/client'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 
@@ -15,7 +15,8 @@ interface Test {
   max_attempts: number
   negative_marking: boolean
   shuffle_questions: boolean
-  show_answers_after: boolean
+  show_correct_answers: boolean
+  show_explanations: boolean
   tags: string[]
 }
 
@@ -28,7 +29,6 @@ export default function TestDetailPage() {
   const [attemptCount, setAttemptCount] = useState(0)
   const [loading, setLoading] = useState(true)
   const [previousAttempts, setPreviousAttempts] = useState<any[]>([])
-  const supabase = createClient()
 
   useEffect(() => {
     loadTestDetails()
@@ -36,38 +36,21 @@ export default function TestDetailPage() {
 
   const loadTestDetails = async () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
-
-      // Load test
-      const { data: testData, error: testError } = await supabase
-        .from('tests')
-        .select('*')
-        .eq('id', testId)
-        .single()
-
-      if (testError) throw testError
+      // Load test with questions
+      const testData = await apiClient.getTest(testId)
       setTest(testData)
 
       // Count questions
-      const { count } = await supabase
-        .from('questions')
-        .select('*', { count: 'exact', head: true })
-        .eq('test_id', testId)
-
-      setQuestionCount(count || 0)
+      const questions = await apiClient.getQuestions(testId)
+      setQuestionCount(questions.length)
 
       // Load previous attempts
-      const { data: attemptsData } = await supabase
-        .from('attempts')
-        .select('*')
-        .eq('test_id', testId)
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false })
+      const allAttempts = await apiClient.getAttempts()
+      const testAttempts = allAttempts.filter((a: any) => a.test_id === testId)
 
-      if (attemptsData) {
-        setPreviousAttempts(attemptsData)
-        setAttemptCount(attemptsData.length)
+      if (testAttempts) {
+        setPreviousAttempts(testAttempts)
+        setAttemptCount(testAttempts.length)
       }
     } catch (error: any) {
       console.error('Error loading test:', error)
@@ -80,28 +63,14 @@ export default function TestDetailPage() {
   const handleStartTest = async () => {
     if (!test) return
 
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
-
-    // Create new attempt
-    const { data: attempt, error } = await supabase
-      .from('attempts')
-      .insert({
-        test_id: testId,
-        user_id: user.id,
-        status: 'in_progress',
-        started_at: new Date().toISOString(),
-      })
-      .select()
-      .single()
-
-    if (error) {
+    try {
+      // Create new attempt
+      const attempt = await apiClient.startAttempt(testId)
+      router.push(`/dashboard/tests/${testId}/take?attempt=${attempt.id}`)
+    } catch (error: any) {
       console.error('Error creating attempt:', error)
       alert(`Failed to start test: ${error.message}`)
-      return
     }
-
-    router.push(`/dashboard/tests/${testId}/take?attempt=${attempt.id}`)
   }
 
   if (loading) {

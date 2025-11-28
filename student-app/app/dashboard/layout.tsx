@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { createClient } from '@/lib/supabase/client'
+import { apiClient } from '@/lib/api/client'
 import { useRouter, usePathname } from 'next/navigation'
 import Link from 'next/link'
 
@@ -14,15 +14,14 @@ export default function DashboardLayout({
   const pathname = usePathname()
   const [user, setUser] = useState<any>(null)
   const [loading, setLoading] = useState(true)
-  const supabase = createClient()
 
   useEffect(() => {
     const getUser = async () => {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) {
+      try {
+        const { user: userData } = await apiClient.getCurrentUser()
+        setUser(userData)
+      } catch (error) {
         router.push('/login')
-      } else {
-        setUser(user)
       }
       setLoading(false)
     }
@@ -30,7 +29,7 @@ export default function DashboardLayout({
   }, [])
 
   const handleLogout = async () => {
-    await supabase.auth.signOut()
+    await apiClient.logout()
     router.push('/login')
     router.refresh()
   }

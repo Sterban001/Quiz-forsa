@@ -1,48 +1,67 @@
-import { createClient } from '@/lib/supabase/server'
+'use client'
 
-export default async function AnalyticsPage() {
-  const supabase = await createClient()
+import { useState, useEffect } from 'react'
+import { apiClient } from '@/lib/api/client'
+import { useRouter } from 'next/navigation'
 
-  // Get overall statistics
-  const { data: stats, error: statsError } = await supabase
-    .from('test_statistics')
-    .select('*')
-    .order('total_attempts', { ascending: false })
+export default function AnalyticsPage() {
+  const router = useRouter()
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [dashboardStats, setDashboardStats] = useState<any>(null)
+  const [testStats, setTestStats] = useState<any[]>([])
 
-  const { count: totalTests } = await supabase
-    .from('tests')
-    .select('*', { count: 'exact', head: true })
+  useEffect(() => {
+    loadAnalytics()
+  }, [])
 
-  const { count: totalAttempts } = await supabase
-    .from('attempts')
-    .select('*', { count: 'exact', head: true })
+  const loadAnalytics = async () => {
+    try {
+      setLoading(true)
+      setError(null)
 
-  const { count: completedAttempts } = await supabase
-    .from('attempts')
-    .select('*', { count: 'exact', head: true })
-    .eq('status', 'completed')
+      // Load dashboard stats and test statistics
+      const [statsData, testStatsData] = await Promise.all([
+        apiClient.getDashboardStats(),
+        apiClient.getTestStatistics()
+      ])
 
-  const { count: totalStudents } = await supabase
-    .from('profiles')
-    .select('*', { count: 'exact', head: true })
-    .eq('role', 'student')
-
-  // Calculate average score
-  const { data: avgScoreData } = await supabase
-    .from('attempts')
-    .select('score, max_score')
-    .eq('status', 'completed')
-
-  let avgScore = 0
-  if (avgScoreData && avgScoreData.length > 0) {
-    const totalPercentage = avgScoreData.reduce((sum, attempt) => {
-      if (attempt.max_score > 0) {
-        return sum + (attempt.score / attempt.max_score) * 100
+      setDashboardStats(statsData)
+      setTestStats(testStatsData)
+    } catch (err: any) {
+      console.error('Error loading analytics:', err)
+      setError(err.message || 'Failed to load analytics')
+      if (err.message?.includes('unauthorized') || err.message?.includes('not authenticated')) {
+        router.push('/login')
       }
-      return sum
-    }, 0)
-    avgScore = totalPercentage / avgScoreData.length
+    } finally {
+      setLoading(false)
+    }
   }
+
+  if (loading) {
+    return (
+      <div className="p-8 flex items-center justify-center">
+        <div className="text-gray-600">Loading analytics...</div>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="p-8">
+        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded mb-4">
+          Error loading analytics: {error}
+        </div>
+      </div>
+    )
+  }
+
+  const totalTests = dashboardStats?.total_tests || 0
+  const totalAttempts = dashboardStats?.total_attempts || 0
+  const completedAttempts = dashboardStats?.completed_attempts || 0
+  const totalStudents = dashboardStats?.total_students || 0
+  const avgScore = dashboardStats?.average_score || 0
 
   return (
     <div className="p-8">
@@ -60,7 +79,7 @@ export default async function AnalyticsPage() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
             </svg>
           </div>
-          <p className="text-3xl font-bold text-gray-900">{totalTests || 0}</p>
+          <p className="text-3xl font-bold text-gray-900">{totalTests}</p>
         </div>
 
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
@@ -70,9 +89,9 @@ export default async function AnalyticsPage() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
             </svg>
           </div>
-          <p className="text-3xl font-bold text-gray-900">{totalAttempts || 0}</p>
+          <p className="text-3xl font-bold text-gray-900">{totalAttempts}</p>
           <p className="text-sm text-gray-500 mt-1">
-            {completedAttempts || 0} completed
+            {completedAttempts} completed
           </p>
         </div>
 
@@ -94,7 +113,7 @@ export default async function AnalyticsPage() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
             </svg>
           </div>
-          <p className="text-3xl font-bold text-gray-900">{totalStudents || 0}</p>
+          <p className="text-3xl font-bold text-gray-900">{totalStudents}</p>
         </div>
       </div>
 
@@ -104,13 +123,7 @@ export default async function AnalyticsPage() {
           <h2 className="text-xl font-semibold text-gray-900">Test Performance</h2>
         </div>
 
-        {statsError && (
-          <div className="p-6 bg-red-50 border-b border-red-200 text-red-700">
-            Error loading statistics: {statsError.message}
-          </div>
-        )}
-
-        {stats && stats.length === 0 && (
+        {testStats.length === 0 && (
           <div className="p-12 text-center">
             <svg
               className="w-12 h-12 text-gray-400 mx-auto mb-3"
@@ -129,7 +142,7 @@ export default async function AnalyticsPage() {
           </div>
         )}
 
-        {stats && stats.length > 0 && (
+        {testStats.length > 0 && (
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead className="bg-gray-50 border-b border-gray-200">
@@ -158,7 +171,7 @@ export default async function AnalyticsPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
-                {stats.map((stat: any) => (
+                {testStats.map((stat: any) => (
                   <tr key={stat.test_id} className="hover:bg-gray-50">
                     <td className="px-6 py-4">
                       <div className="text-sm font-medium text-gray-900">{stat.title}</div>
@@ -171,7 +184,7 @@ export default async function AnalyticsPage() {
                       {stat.avg_score ? `${stat.avg_score.toFixed(1)}%` : '-'}
                     </td>
                     <td className="px-6 py-4">
-                      {stat.pass_rate !== null ? (
+                      {stat.pass_rate !== null && stat.pass_rate !== undefined ? (
                         <div className="flex items-center">
                           <div className="flex-1 bg-gray-200 rounded-full h-2 mr-2">
                             <div

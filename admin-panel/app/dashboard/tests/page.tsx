@@ -1,13 +1,46 @@
-import { createClient } from '@/lib/supabase/server'
+'use client'
+
+import { useEffect, useState } from 'react'
+import { apiClient } from '@/lib/api/client'
+import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 
-export default async function TestsPage() {
-  const supabase = await createClient()
+export default function TestsPage() {
+  const router = useRouter()
+  const [tests, setTests] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
-  const { data: tests, error } = await supabase
-    .from('tests')
-    .select('id, title, description, category, status, visibility, created_at, time_limit_minutes')
-    .order('created_at', { ascending: false })
+  useEffect(() => {
+    async function fetchTests() {
+      try {
+        setLoading(true)
+        const data = await apiClient.getTests()
+        setTests(data)
+      } catch (err: any) {
+        console.error('Failed to fetch tests:', err)
+        setError(err.message || 'Failed to load tests')
+        if (err.message?.includes('unauthorized') || err.message?.includes('authentication')) {
+          router.push('/login')
+        }
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchTests()
+  }, [router])
+
+  if (loading) {
+    return (
+      <div className="p-8 flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <div className="w-16 h-16 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading tests...</p>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="p-8">
@@ -29,7 +62,7 @@ export default async function TestsPage() {
 
       {error && (
         <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded mb-4">
-          Error loading tests: {error.message}
+          Error loading tests: {error}
         </div>
       )}
 

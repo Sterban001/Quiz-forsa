@@ -1,57 +1,94 @@
-import { createClient } from '@/lib/supabase/server'
-import { redirect } from 'next/navigation'
+'use client'
+
+import { useEffect, useState } from 'react'
+import { apiClient } from '@/lib/api/client'
+import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 
-export default async function DashboardPage() {
-  const supabase = await createClient()
+interface DashboardStats {
+  totalTests: number
+  publishedTests: number
+  totalAttempts: number
+  pendingReview: number
+  totalUsers: number
+  recentTests: any[]
+}
 
-  const { data: { user }, error: authError } = await supabase.auth.getUser()
+export default function DashboardPage() {
+  const router = useRouter()
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [stats, setStats] = useState<DashboardStats | null>(null)
+  const [profile, setProfile] = useState<any>(null)
 
-  if (authError || !user) {
-    redirect('/login')
+  useEffect(() => {
+    async function fetchData() {
+      try {
+        setLoading(true)
+
+        // Fetch current user profile
+        const { user, profile: userProfile } = await apiClient.getCurrentUser()
+        setProfile(userProfile)
+
+        // Fetch dashboard stats
+        const dashboardStats = await apiClient.getDashboardStats()
+
+        // Fetch recent tests
+        const recentTests = await apiClient.getTests()
+        const sortedTests = recentTests
+          .sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+          .slice(0, 5)
+
+        setStats({
+          totalTests: dashboardStats.totalTests || 0,
+          publishedTests: dashboardStats.publishedTests || 0,
+          totalAttempts: dashboardStats.totalAttempts || 0,
+          pendingReview: dashboardStats.pendingReview || 0,
+          totalUsers: dashboardStats.totalUsers || 0,
+          recentTests: sortedTests
+        })
+      } catch (err: any) {
+        console.error('Failed to fetch dashboard data:', err)
+        setError(err.message || 'Failed to load dashboard')
+        if (err.message?.includes('unauthorized') || err.message?.includes('authentication')) {
+          router.push('/login')
+        }
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchData()
+  }, [router])
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-16 h-16 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading dashboard...</p>
+        </div>
+      </div>
+    )
   }
 
-  // Check if user is admin
-  const { data: profile, error: profileError } = await supabase
-    .from('profiles')
-    .select('role, display_name')
-    .eq('id', user.id)
-    .single()
-
-  if (profileError || profile?.role !== 'admin') {
-    redirect('/login')
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-red-600 mb-4">{error}</p>
+          <button
+            onClick={() => window.location.reload()}
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    )
   }
 
-  // Fetch dashboard statistics
-  const { data: tests, error: testsError } = await supabase
-    .from('tests')
-    .select('id, title, status, created_at, test_type')
-    .order('created_at', { ascending: false })
-    .limit(5)
-
-  const { count: totalTests } = await supabase
-    .from('tests')
-    .select('*', { count: 'exact', head: true })
-
-  const { count: publishedTests } = await supabase
-    .from('tests')
-    .select('*', { count: 'exact', head: true })
-    .eq('status', 'published')
-
-  const { count: totalAttempts } = await supabase
-    .from('attempts')
-    .select('*', { count: 'exact', head: true })
-
-  const { count: pendingReview } = await supabase
-    .from('attempts')
-    .select('attempts.*, tests!inner(test_type)', { count: 'exact', head: true })
-    .eq('status', 'submitted')
-    .eq('tests.test_type', 'manual_graded')
-
-  const { count: totalUsers } = await supabase
-    .from('profiles')
-    .select('*', { count: 'exact', head: true })
-    .eq('role', 'student')
+  const { totalTests, publishedTests, totalAttempts, pendingReview, totalUsers, recentTests } = stats || {}
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -60,7 +97,7 @@ export default async function DashboardPage() {
         <div className="mb-8">
           <h1 className="text-4xl font-bold text-gray-900 mb-2">Admin Dashboard</h1>
           <p className="text-gray-600 text-lg">
-            Welcome back, <span className="font-semibold">{profile?.display_name || user.email}</span>
+            Welcome back, <span className="font-semibold">{profile?.display_name || 'Admin'}</span>
           </p>
         </div>
 
@@ -197,8 +234,8 @@ export default async function DashboardPage() {
             <p className="text-gray-600 text-sm mt-1">Your latest created assessments</p>
           </div>
           <div className="divide-y divide-gray-100">
-            {tests && tests.length > 0 ? (
-              tests.map((test) => (
+            {recentTests && recentTests.length > 0 ? (
+              recentTests.map((test) => (
                 <Link
                   key={test.id}
                   href={`/dashboard/tests/${test.id}`}
@@ -208,11 +245,6 @@ export default async function DashboardPage() {
                     <div className="flex-1">
                       <div className="flex items-center gap-3 mb-2">
                         <h3 className="text-lg font-semibold text-gray-900">{test.title}</h3>
-                        {test.test_type === 'manual_graded' && (
-                          <span className="px-2 py-1 bg-orange-100 text-orange-700 text-xs font-semibold rounded-full">
-                            Manual Review
-                          </span>
-                        )}
                       </div>
                       <p className="text-sm text-gray-500 flex items-center gap-2">
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">

@@ -1,29 +1,69 @@
-import { createClient } from '@/lib/supabase/server'
+'use client'
+
+import { useState, useEffect } from 'react'
+import { apiClient } from '@/lib/api/client'
+import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 
-export default async function AttemptDetailPage({ params }: { params: { id: string } }) {
-  const supabase = await createClient()
-  const attemptId = params.id
+export default function AttemptDetailPage() {
+  const params = useParams()
+  const router = useRouter()
+  const attemptId = params.id as string
 
-  // Get attempt details
-  const { data: attempt, error: attemptError } = await supabase
-    .from('attempts')
-    .select(`
-      *,
-      tests (
-        id,
-        title,
-        pass_score
-      ),
-      profiles (
-        id,
-        display_name
-      )
-    `)
-    .eq('id', attemptId)
-    .single()
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [attempt, setAttempt] = useState<any>(null)
+  const [answers, setAnswers] = useState<any[]>([])
 
-  if (attemptError || !attempt) {
+  useEffect(() => {
+    loadAttemptDetails()
+  }, [attemptId])
+
+  const loadAttemptDetails = async () => {
+    try {
+      setLoading(true)
+      setError(null)
+
+      const attemptData = await apiClient.getAttempt(attemptId)
+      setAttempt(attemptData)
+
+      // The API returns attempt with answers included
+      if (attemptData.answers) {
+        setAnswers(attemptData.answers)
+      }
+    } catch (err: any) {
+      console.error('Error loading attempt:', err)
+      setError(err.message || 'Failed to load attempt details')
+      if (err.message?.includes('unauthorized') || err.message?.includes('not authenticated')) {
+        router.push('/login')
+      }
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="p-8 flex items-center justify-center">
+        <div className="text-gray-600">Loading attempt details...</div>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="p-8">
+        <div className="bg-red-50 border border-red-200 text-red-700 p-4 rounded mb-4">
+          {error}
+        </div>
+        <Link href="/dashboard/attempts" className="text-blue-600 hover:text-blue-800">
+          Back to Attempts
+        </Link>
+      </div>
+    )
+  }
+
+  if (!attempt) {
     return (
       <div className="p-8">
         <div className="bg-red-50 border border-red-200 text-red-700 p-4 rounded">
@@ -33,29 +73,8 @@ export default async function AttemptDetailPage({ params }: { params: { id: stri
     )
   }
 
-  // Get all answers for this attempt
-  const { data: answers, error: answersError } = await supabase
-    .from('attempt_answers')
-    .select(`
-      *,
-      questions (
-        id,
-        type,
-        prompt,
-        explanation,
-        points,
-        question_options (
-          id,
-          label,
-          is_correct
-        )
-      )
-    `)
-    .eq('attempt_id', attemptId)
-    .order('created_at')
-
   const scorePercentage = attempt.max_score > 0 ? (attempt.score / attempt.max_score) * 100 : 0
-  const passed = scorePercentage >= (attempt.tests?.pass_score || 70)
+  const passed = scorePercentage >= (attempt.test?.pass_score || attempt.tests?.pass_score || 70)
 
   const correctAnswers = answers?.filter(a => a.is_correct).length || 0
   const totalQuestions = answers?.length || 0
@@ -79,16 +98,16 @@ export default async function AttemptDetailPage({ params }: { params: { id: stri
               <div>
                 <span className="text-sm text-gray-600">Student:</span>
                 <span className="ml-2 text-sm font-medium text-gray-900">
-                  {attempt.profiles?.display_name || 'Unknown Student'}
+                  {attempt.profiles?.display_name || attempt.user?.display_name || 'Unknown Student'}
                 </span>
               </div>
               <div>
                 <span className="text-sm text-gray-600">Test:</span>
                 <Link
-                  href={`/dashboard/tests/${attempt.tests?.id}`}
+                  href={`/dashboard/tests/${attempt.test?.id || attempt.tests?.id}`}
                   className="ml-2 text-sm font-medium text-blue-600 hover:text-blue-800"
                 >
-                  {attempt.tests?.title}
+                  {attempt.test?.title || attempt.tests?.title}
                 </Link>
               </div>
               <div>
@@ -138,7 +157,7 @@ export default async function AttemptDetailPage({ params }: { params: { id: stri
                 </div>
                 <div className="flex justify-between items-center mt-1">
                   <span className="text-xs text-gray-500">
-                    Pass Score: {attempt.tests?.pass_score || 70}%
+                    Pass Score: {attempt.test?.pass_score || attempt.tests?.pass_score || 70}%
                   </span>
                   <span className={`text-sm font-medium ${passed ? 'text-green-600' : 'text-red-600'}`}>
                     {scorePercentage.toFixed(1)}% {passed ? '(Passed)' : '(Failed)'}
@@ -174,12 +193,6 @@ export default async function AttemptDetailPage({ params }: { params: { id: stri
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
         <h2 className="text-xl font-semibold mb-4">Question-by-Question Review</h2>
 
-        {answersError && (
-          <div className="bg-red-50 border border-red-200 text-red-700 p-4 rounded mb-4">
-            Error loading answers: {answersError.message}
-          </div>
-        )}
-
         {!answers || answers.length === 0 ? (
           <div className="text-center py-8 text-gray-500">
             No answers found for this attempt.
@@ -187,7 +200,7 @@ export default async function AttemptDetailPage({ params }: { params: { id: stri
         ) : (
           <div className="space-y-6">
             {answers.map((answer: any, index: number) => {
-              const question = answer.questions
+              const question = answer.question || answer.questions
               const studentResponse = answer.response_json
 
               return (

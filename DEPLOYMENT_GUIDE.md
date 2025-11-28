@@ -91,7 +91,68 @@ supabase db push
 
 ---
 
-## Step 4: Configure Environment Variables
+## Step 4: Set Up Redis Cloud (Optional but Recommended)
+
+Redis provides caching and persistent rate limiting for better performance and security.
+
+### Why Redis?
+- ✅ Rate limiting works across server restarts
+- ✅ Supports multiple server instances
+- ✅ Prevents abuse (login attempts, OTP spam, etc.)
+- ✅ FREE tier: 30MB (enough for 10,000+ users)
+
+### Setup Steps
+
+1. **Go to** [https://redis.com/try-free/](https://redis.com/try-free/)
+2. **Sign up** (no credit card required)
+3. **Create database:**
+   - Plan: **Free**
+   - Region: **US-East-1** (or closest to your users)
+   - Name: `quiz-platform-cache`
+4. **Wait** 1-2 minutes for database creation
+5. **Copy connection details:**
+   - Click on your database
+   - Find the connection string (looks like):
+   ```
+   redis://default:PASSWORD@redis-xxxxx.ec2.cloud.redislabs.com:PORT
+   ```
+
+### Costs
+- **Free tier:** $0/month forever (30MB memory, 30 connections)
+- **Upgrade options:** $5/mo for 100MB (only if you need more)
+
+**For 10,000 active users, free tier is sufficient!**
+
+---
+
+## Step 5: Configure Environment Variables
+
+### For Backend API
+
+1. **Navigate to** `backend-api` folder
+2. **Create** `.env` file (copy from `.env.example`)
+3. **Add:**
+
+```env
+PORT=4000
+NODE_ENV=development
+
+# Supabase
+SUPABASE_URL=your-project-url-here
+SUPABASE_ANON_KEY=your-anon-key-here
+SUPABASE_SERVICE_ROLE_KEY=your-service-role-key-here
+
+# CORS
+CORS_ORIGIN=http://localhost:3000,http://localhost:3001,http://localhost:3005
+
+# JWT
+JWT_SECRET=your-super-secret-jwt-key-change-this-in-production
+
+# Redis (optional - app works without it)
+# For local development: redis://localhost:6379
+# For Redis Cloud: redis://default:PASSWORD@ENDPOINT:PORT
+REDIS_URL=redis://default:YOUR_PASSWORD@YOUR_ENDPOINT:YOUR_PORT
+```
 
 ### For Admin Panel
 
@@ -100,6 +161,7 @@ supabase db push
 3. **Add:**
 
 ```env
+NEXT_PUBLIC_API_URL=http://localhost:4000
 NEXT_PUBLIC_SUPABASE_URL=your-project-url-here
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key-here
 ```
@@ -111,25 +173,32 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key-here
 3. **Add:**
 
 ```env
+NEXT_PUBLIC_API_URL=http://localhost:4000
 NEXT_PUBLIC_SUPABASE_URL=your-project-url-here
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key-here
 ```
 
-**⚠️ IMPORTANT:** Replace `your-project-url-here` and `your-anon-key-here` with the actual values from Step 2.
+**⚠️ IMPORTANT:** Replace placeholder values with actual credentials from Steps 2 and 4.
 
 ---
 
-## Step 5: Install Dependencies
+## Step 6: Install Dependencies
 
-Open two terminal windows:
+Open three terminal windows:
 
-### Terminal 1: Admin Panel
+### Terminal 1: Backend API
+```bash
+cd backend-api
+npm install
+```
+
+### Terminal 2: Admin Panel
 ```bash
 cd admin-panel
 npm install
 ```
 
-### Terminal 2: Student App
+### Terminal 3: Student App
 ```bash
 cd student-app
 npm install
@@ -137,7 +206,7 @@ npm install
 
 ---
 
-## Step 6: Create First Admin User
+## Step 7: Create First Admin User
 
 ### Method 1: Via Supabase Dashboard
 
@@ -177,27 +246,57 @@ VALUES (
 
 ---
 
-## Step 7: Start Development Servers
+## Step 8: Start Development Servers
 
-### Terminal 1: Admin Panel (Port 3000)
+### Terminal 1: Backend API (Port 4000)
+```bash
+cd backend-api
+npm run dev
+```
+
+**Look for:**
+```
+Redis Client: Connected and ready
+🚀 Backend API server running on http://localhost:4000
+📊 Environment: development
+💾 Redis: Connected ✓
+```
+
+**Test:** Open http://localhost:4000/health
+```json
+{
+  "status": "ok",
+  "message": "Backend API is running",
+  "redis": "connected"
+}
+```
+
+### Terminal 2: Admin Panel (Port 3000)
 ```bash
 cd admin-panel
 npm run dev
 ```
 
-### Terminal 2: Student App (Port 3005)
+### Terminal 3: Student App (Port 3005)
 ```bash
 cd student-app
 npm run dev
 ```
 
 **Access:**
+- Backend API: [http://localhost:4000](http://localhost:4000)
 - Admin Panel: [http://localhost:3000](http://localhost:3000)
 - Student App: [http://localhost:3005](http://localhost:3005)
 
 ---
 
-## Step 8: Verify Installation
+## Step 9: Verify Installation
+
+### Backend API Checklist
+- [ ] Server starts without errors
+- [ ] Redis shows "Connected ✓" (or "Not available" if skipped)
+- [ ] Health endpoint returns correct response
+- [ ] No errors in console
 
 ### Admin Panel Checklist
 - [ ] Can log in with admin credentials
@@ -215,21 +314,37 @@ npm run dev
 
 ---
 
-## Step 9: Production Deployment (Optional)
+## Step 10: Production Deployment (Optional)
 
-### Deploy to Vercel (Recommended)
+### Deploy Backend API
 
-#### Admin Panel
+#### Option 1: Railway.app (Recommended - includes free Redis)
+1. Go to [https://railway.app](https://railway.app)
+2. Create new project → Deploy from GitHub
+3. Add Redis service (free addon)
+4. Add environment variables (from your `.env`)
+5. Deploy
+
+#### Option 2: Render.com
+1. Go to [https://render.com](https://render.com)
+2. Create Web Service from GitHub
+3. Add Redis Cloud URL to environment
+4. Deploy
+
+### Deploy Admin Panel (Vercel)
+
 ```bash
 cd admin-panel
 npx vercel
 ```
 
-Follow prompts, then add environment variables in Vercel Dashboard:
+Add environment variables in Vercel Dashboard:
+- `NEXT_PUBLIC_API_URL` (your backend URL)
 - `NEXT_PUBLIC_SUPABASE_URL`
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
 
-#### Student App
+### Deploy Student App (Vercel)
+
 ```bash
 cd student-app
 npx vercel
@@ -278,6 +393,13 @@ If you want to add file uploads later:
 ---
 
 ## Troubleshooting
+
+### Redis shows "disconnected" or "Not available"
+- ✅ Check `REDIS_URL` is correctly formatted
+- ✅ Verify Redis Cloud database is active
+- ✅ Test connection: `redis-cli -u YOUR_REDIS_URL ping`
+- ✅ App still works without Redis (graceful degradation)
+- ✅ Restart backend after changing `.env`
 
 ### Cannot connect to Supabase
 - ✅ Check environment variables are correct

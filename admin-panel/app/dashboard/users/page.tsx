@@ -1,25 +1,71 @@
-import { createClient } from '@/lib/supabase/server'
+'use client'
 
-export default async function UsersPage() {
-  const supabase = await createClient()
+import { useState, useEffect } from 'react'
+import { apiClient } from '@/lib/api/client'
+import { useRouter } from 'next/navigation'
 
-  const { data: users, error } = await supabase
-    .from('profiles')
-    .select('id, role, display_name, avatar_url, created_at, updated_at')
-    .order('created_at', { ascending: false })
+export default function UsersPage() {
+  const router = useRouter()
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [users, setUsers] = useState<any[]>([])
+  const [attempts, setAttempts] = useState<any[]>([])
+
+  useEffect(() => {
+    loadUsers()
+  }, [])
+
+  const loadUsers = async () => {
+    try {
+      setLoading(true)
+      setError(null)
+
+      // Load users and attempts
+      const [usersData, attemptsData] = await Promise.all([
+        apiClient.getUsers(),
+        apiClient.getAttempts()
+      ])
+
+      setUsers(usersData)
+      setAttempts(attemptsData)
+    } catch (err: any) {
+      console.error('Error loading users:', err)
+      setError(err.message || 'Failed to load users')
+      if (err.message?.includes('unauthorized') || err.message?.includes('not authenticated')) {
+        router.push('/login')
+      }
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="p-8 flex items-center justify-center">
+        <div className="text-gray-600">Loading users...</div>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="p-8">
+        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded mb-4">
+          Error loading users: {error}
+        </div>
+      </div>
+    )
+  }
 
   // Count attempts per user
-  const { data: userAttempts } = await supabase
-    .from('attempts')
-    .select('user_id, status')
-
-  const attemptsByUser = userAttempts?.reduce((acc: any, attempt: any) => {
-    if (!acc[attempt.user_id]) {
-      acc[attempt.user_id] = { total: 0, completed: 0 }
+  const attemptsByUser = attempts.reduce((acc: any, attempt: any) => {
+    const userId = attempt.user_id
+    if (!acc[userId]) {
+      acc[userId] = { total: 0, completed: 0 }
     }
-    acc[attempt.user_id].total++
+    acc[userId].total++
     if (attempt.status === 'completed') {
-      acc[attempt.user_id].completed++
+      acc[userId].completed++
     }
     return acc
   }, {})
@@ -32,12 +78,6 @@ export default async function UsersPage() {
           <p className="text-gray-600 mt-1">Manage user accounts and permissions</p>
         </div>
       </div>
-
-      {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded mb-4">
-          Error loading users: {error.message}
-        </div>
-      )}
 
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">

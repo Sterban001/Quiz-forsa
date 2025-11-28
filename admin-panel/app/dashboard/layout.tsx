@@ -1,29 +1,25 @@
-import { createClient } from '@/lib/supabase/server'
-import { redirect } from 'next/navigation'
-import Link from 'next/link'
+'use client'
 
-export default async function DashboardLayout({
+import Link from 'next/link'
+import { useRouter } from 'next/navigation'
+import { apiClient } from '@/lib/api/client'
+
+export default function DashboardLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
-  const supabase = await createClient()
+  const router = useRouter()
 
-  const { data: { user }, error: authError } = await supabase.auth.getUser()
-
-  if (authError || !user) {
-    redirect('/login')
-  }
-
-  // Check if user is admin
-  const { data: profile, error: profileError } = await supabase
-    .from('profiles')
-    .select('role')
-    .eq('id', user.id)
-    .single()
-
-  if (profileError || profile?.role !== 'admin') {
-    redirect('/login')
+  const handleLogout = async () => {
+    try {
+      await apiClient.logout()
+      router.push('/login')
+    } catch (error) {
+      console.error('Logout failed:', error)
+      // Even if logout fails, redirect to login
+      router.push('/login')
+    }
   }
 
   return (
@@ -183,27 +179,25 @@ export default async function DashboardLayout({
         </nav>
 
         <div className="p-4 border-t border-gray-800">
-          <form action="/api/auth/logout" method="POST">
-            <button
-              type="submit"
-              className="flex items-center px-4 py-3 rounded-lg hover:bg-gray-800 transition-colors w-full text-left"
+          <button
+            onClick={handleLogout}
+            className="flex items-center px-4 py-3 rounded-lg hover:bg-gray-800 transition-colors w-full text-left"
+          >
+            <svg
+              className="w-5 h-5 mr-3"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
             >
-              <svg
-                className="w-5 h-5 mr-3"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
-                />
-              </svg>
-              Logout
-            </button>
-          </form>
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
+              />
+            </svg>
+            Logout
+          </button>
         </div>
       </aside>
 

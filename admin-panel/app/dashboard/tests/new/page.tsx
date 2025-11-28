@@ -1,12 +1,11 @@
 'use client'
 
 import { useState } from 'react'
-import { createClient } from '@/lib/supabase/client'
+import { apiClient } from '@/lib/api/client'
 import { useRouter } from 'next/navigation'
 
 export default function NewTestPage() {
   const router = useRouter()
-  const supabase = createClient()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -18,7 +17,6 @@ export default function NewTestPage() {
     time_limit_minutes: 60,
     visibility: 'private',
     status: 'draft',
-    test_type: 'auto_graded',
     max_attempts: 1,
     pass_score: 50,
     negative_marking: false,
@@ -33,27 +31,17 @@ export default function NewTestPage() {
     setError(null)
 
     try {
-      const { data: { user } } = await supabase.auth.getUser()
-
-      if (!user) {
-        throw new Error('Not authenticated')
-      }
-
-      const { data, error: insertError } = await supabase
-        .from('tests')
-        .insert({
-          ...formData,
-          tags: formData.tags ? formData.tags.split(',').map(t => t.trim()) : [],
-          created_by: user.id,
-        })
-        .select()
-        .single()
-
-      if (insertError) throw insertError
+      const data = await apiClient.createTest({
+        ...formData,
+        tags: formData.tags ? formData.tags.split(',').map(t => t.trim()) : [],
+      })
 
       router.push(`/dashboard/tests/${data.id}/edit`)
     } catch (err: any) {
       setError(err.message || 'Failed to create test')
+      if (err.message?.includes('unauthorized') || err.message?.includes('not authenticated')) {
+        router.push('/login')
+      }
     } finally {
       setLoading(false)
     }
@@ -182,26 +170,6 @@ export default function NewTestPage() {
               <option value="public">Public</option>
               <option value="whitelist">Whitelist Only</option>
             </select>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Test Type *
-            </label>
-            <select
-              name="test_type"
-              value={formData.test_type}
-              onChange={handleChange}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="auto_graded">Auto-Graded (MCQ, True/False, Number)</option>
-              <option value="manual_graded">Manual-Graded (Short Text, Long Text)</option>
-            </select>
-            <p className="mt-1 text-xs text-gray-500">
-              {formData.test_type === 'auto_graded'
-                ? 'Supports: Multiple Choice, True/False, Number questions - Instant scoring'
-                : 'Supports: Short Text, Long Text questions - Requires manual grading by admin'}
-            </p>
           </div>
 
           <div>

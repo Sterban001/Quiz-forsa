@@ -1,13 +1,17 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { createClient } from '@/lib/supabase/client'
+import { apiClient } from '@/lib/api/client'
+import { useRouter } from 'next/navigation'
 
 export default function SettingsPage() {
-  const supabase = createClient()
+  const router = useRouter()
   const [loading, setLoading] = useState(false)
+  const [loadingProfile, setLoadingProfile] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null)
   const [profile, setProfile] = useState({
+    id: '',
     display_name: '',
     avatar_url: '',
   })
@@ -18,25 +22,26 @@ export default function SettingsPage() {
 
   const loadProfile = async () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
+      setLoadingProfile(true)
+      setError(null)
 
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('display_name, avatar_url')
-        .eq('id', user.id)
-        .single()
+      const data = await apiClient.getCurrentUser()
 
-      if (error) throw error
-
-      if (data) {
+      if (data.profile) {
         setProfile({
-          display_name: data.display_name || '',
-          avatar_url: data.avatar_url || '',
+          id: data.profile.id,
+          display_name: data.profile.display_name || '',
+          avatar_url: data.profile.avatar_url || '',
         })
       }
-    } catch (error: any) {
-      console.error('Error loading profile:', error)
+    } catch (err: any) {
+      console.error('Error loading profile:', err)
+      setError(err.message || 'Failed to load profile')
+      if (err.message?.includes('unauthorized') || err.message?.includes('not authenticated')) {
+        router.push('/login')
+      }
+    } finally {
+      setLoadingProfile(false)
     }
   }
 
@@ -46,26 +51,40 @@ export default function SettingsPage() {
     setMessage(null)
 
     try {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) throw new Error('Not authenticated')
+      if (!profile.id) throw new Error('Profile ID not found')
 
-      const { error } = await supabase
-        .from('profiles')
-        .update({
-          display_name: profile.display_name,
-          avatar_url: profile.avatar_url,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', user.id)
-
-      if (error) throw error
+      await apiClient.updateUser(profile.id, {
+        display_name: profile.display_name,
+        avatar_url: profile.avatar_url,
+      })
 
       setMessage({ type: 'success', text: 'Profile updated successfully' })
-    } catch (error: any) {
-      setMessage({ type: 'error', text: error.message || 'Failed to update profile' })
+    } catch (err: any) {
+      setMessage({ type: 'error', text: err.message || 'Failed to update profile' })
+      if (err.message?.includes('unauthorized') || err.message?.includes('not authenticated')) {
+        router.push('/login')
+      }
     } finally {
       setLoading(false)
     }
+  }
+
+  if (loadingProfile) {
+    return (
+      <div className="p-8 flex items-center justify-center">
+        <div className="text-gray-600">Loading settings...</div>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="p-8">
+        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded mb-4">
+          {error}
+        </div>
+      </div>
+    )
   }
 
   return (

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { createClient } from '@/lib/supabase/client'
+import { apiClient } from '@/lib/api/client'
 import { useParams, useRouter } from 'next/navigation'
 
 type QuestionType = 'mcq_single' | 'mcq_multi' | 'true_false' | 'short_text' | 'long_text' | 'number'
@@ -27,11 +27,11 @@ interface Question {
 export default function EditTestPage() {
   const params = useParams()
   const router = useRouter()
-  const supabase = createClient()
   const testId = params.id as string
 
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const [test, setTest] = useState<any>(null)
   const [questions, setQuestions] = useState<Question[]>([])
   const [showQuestionForm, setShowQuestionForm] = useState(false)
@@ -46,25 +46,13 @@ export default function EditTestPage() {
 
   const loadTest = async () => {
     try {
-      const { data: testData, error: testError } = await supabase
-        .from('tests')
-        .select('*')
-        .eq('id', testId)
-        .single()
+      setLoading(true)
+      setError(null)
 
-      if (testError) throw testError
+      const testData = await apiClient.getTest(testId)
       setTest(testData)
 
-      const { data: questionsData, error: questionsError } = await supabase
-        .from('questions')
-        .select(`
-          *,
-          question_options (*)
-        `)
-        .eq('test_id', testId)
-        .order('order_index')
-
-      if (questionsError) throw questionsError
+      const questionsData = await apiClient.getQuestions(testId)
 
       const formattedQuestions = questionsData.map((q: any) => ({
         id: q.id,
@@ -78,25 +66,26 @@ export default function EditTestPage() {
       }))
 
       setQuestions(formattedQuestions)
-    } catch (error: any) {
-      console.error('Error loading test:', error)
-      alert('Failed to load test')
+    } catch (err: any) {
+      console.error('Error loading test:', err)
+      setError(err.message || 'Failed to load test')
+      if (err.message?.includes('unauthorized') || err.message?.includes('not authenticated')) {
+        router.push('/login')
+      }
     } finally {
       setLoading(false)
     }
   }
 
   const handleAddQuestion = () => {
-    // Default to appropriate question type based on test type
-    const defaultType: QuestionType = test.test_type === 'manual_graded' ? 'short_text' : 'mcq_single'
+    // Default to MCQ single choice
+    const defaultType: QuestionType = 'mcq_single'
 
-    // Text questions don't need options, MCQ questions do
-    const defaultOptions = test.test_type === 'manual_graded'
-      ? []
-      : [
-          { label: '', is_correct: false, order_index: 0 },
-          { label: '', is_correct: false, order_index: 1 },
-        ]
+    // MCQ questions need default options
+    const defaultOptions = [
+      { label: '', is_correct: false, order_index: 0 },
+      { label: '', is_correct: false, order_index: 1 },
+    ]
 
     setEditingQuestion({
       type: defaultType,
@@ -146,78 +135,46 @@ export default function EditTestPage() {
     try {
       if (editingQuestion.id) {
         // Update existing question
-        const { error: updateError } = await supabase
-          .from('questions')
-          .update({
-            type: editingQuestion.type,
-            prompt: editingQuestion.prompt,
-            explanation: editingQuestion.explanation,
-            points: editingQuestion.points,
-            tolerance_numeric: editingQuestion.tolerance_numeric,
-          })
-          .eq('id', editingQuestion.id)
-
-        if (updateError) throw updateError
-
-        // Delete old options
-        await supabase
-          .from('question_options')
-          .delete()
-          .eq('question_id', editingQuestion.id)
-
-        // Insert new options
-        const optionsToInsert = editingQuestion.options.map((opt, idx) => ({
-          question_id: editingQuestion.id,
-          label: opt.label,
-          is_correct: opt.is_correct,
-          order_index: idx,
-        }))
-
-        const { error: optionsError } = await supabase
-          .from('question_options')
-          .insert(optionsToInsert)
-
-        if (optionsError) throw optionsError
+        await apiClient.updateQuestion(editingQuestion.id, {
+          type: editingQuestion.type,
+          prompt: editingQuestion.prompt,
+          explanation: editingQuestion.explanation,
+          points: editingQuestion.points,
+          tolerance_numeric: editingQuestion.tolerance_numeric,
+          options: editingQuestion.options.map((opt, idx) => ({
+            label: opt.label,
+            is_correct: opt.is_correct,
+            order_index: idx,
+          })),
+        })
       } else {
         // Create new question
-        const { data: newQuestion, error: insertError } = await supabase
-          .from('questions')
-          .insert({
-            test_id: testId,
-            type: editingQuestion.type,
-            prompt: editingQuestion.prompt,
-            explanation: editingQuestion.explanation,
-            points: editingQuestion.points,
-            order_index: editingQuestion.order_index,
-            tolerance_numeric: editingQuestion.tolerance_numeric,
-          })
-          .select()
-          .single()
-
-        if (insertError) throw insertError
-
-        // Insert options
-        const optionsToInsert = editingQuestion.options.map((opt, idx) => ({
-          question_id: newQuestion.id,
-          label: opt.label,
-          is_correct: opt.is_correct,
-          order_index: idx,
-        }))
-
-        const { error: optionsError } = await supabase
-          .from('question_options')
-          .insert(optionsToInsert)
-
-        if (optionsError) throw optionsError
+        await apiClient.createQuestion({
+          test_id: testId,
+          type: editingQuestion.type,
+          prompt: editingQuestion.prompt,
+          explanation: editingQuestion.explanation,
+          points: editingQuestion.points,
+          order_index: editingQuestion.order_index,
+          tolerance_numeric: editingQuestion.tolerance_numeric,
+          options: editingQuestion.options.map((opt, idx) => ({
+            label: opt.label,
+            is_correct: opt.is_correct,
+            order_index: idx,
+          })),
+        })
       }
 
       await loadTest()
       setShowQuestionForm(false)
       setEditingQuestion(null)
       setHasUnsavedChanges(false) // Questions are saved immediately
-    } catch (error: any) {
-      console.error('Error saving question:', error)
-      alert('Failed to save question: ' + error.message)
+    } catch (err: any) {
+      console.error('Error saving question:', err)
+      alert('Failed to save question: ' + err.message)
+      if (err.message?.includes('unauthorized') || err.message?.includes('not authenticated')) {
+        router.push('/login')
+      }
     } finally {
       setSaving(false)
     }
@@ -227,17 +184,14 @@ export default function EditTestPage() {
     if (!confirm('Are you sure you want to delete this question?')) return
 
     try {
-      const { error } = await supabase
-        .from('questions')
-        .delete()
-        .eq('id', questionId)
-
-      if (error) throw error
-
+      await apiClient.deleteQuestion(questionId)
       await loadTest()
-    } catch (error: any) {
-      console.error('Error deleting question:', error)
-      alert('Failed to delete question')
+    } catch (err: any) {
+      console.error('Error deleting question:', err)
+      alert('Failed to delete question: ' + err.message)
+      if (err.message?.includes('unauthorized') || err.message?.includes('not authenticated')) {
+        router.push('/login')
+      }
     }
   }
 
@@ -255,27 +209,24 @@ export default function EditTestPage() {
     setSaving(true)
     try {
       // Save test details
-      const { error: testError } = await supabase
-        .from('tests')
-        .update({
-          title: test.title,
-          description: test.description,
-          category: test.category,
-          time_limit_minutes: test.time_limit_minutes,
-          pass_score: test.pass_score,
-          status: test.status,
-          visibility: test.visibility,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', testId)
-
-      if (testError) throw testError
+      await apiClient.updateTest(testId, {
+        title: test.title,
+        description: test.description,
+        category: test.category,
+        time_limit_minutes: test.time_limit_minutes,
+        pass_score: test.pass_score,
+        status: test.status,
+        visibility: test.visibility,
+      })
 
       setHasUnsavedChanges(false)
       alert('Changes saved successfully!')
-    } catch (error: any) {
-      console.error('Error saving changes:', error)
-      alert('Failed to save changes: ' + error.message)
+    } catch (err: any) {
+      console.error('Error saving changes:', err)
+      alert('Failed to save changes: ' + err.message)
+      if (err.message?.includes('unauthorized') || err.message?.includes('not authenticated')) {
+        router.push('/login')
+      }
     } finally {
       setSaving(false)
     }
@@ -285,6 +236,22 @@ export default function EditTestPage() {
     return (
       <div className="p-8 flex items-center justify-center">
         <div className="text-gray-600">Loading...</div>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="p-8">
+        <div className="bg-red-50 border border-red-200 text-red-700 p-4 rounded mb-4">
+          {error}
+        </div>
+        <button
+          onClick={() => router.push('/dashboard/tests')}
+          className="text-blue-600 hover:text-blue-800"
+        >
+          Back to Tests
+        </button>
       </div>
     )
   }
@@ -526,29 +493,16 @@ export default function EditTestPage() {
                   onChange={(e) => handleQuestionTypeChange(e.target.value as QuestionType)}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md"
                 >
-                  {test.test_type === 'auto_graded' ? (
-                    <>
-                      <option value="mcq_single">Multiple Choice (Single Answer)</option>
-                      <option value="mcq_multi">Multiple Choice (Multiple Answers)</option>
-                      <option value="true_false">True/False</option>
-                      <option value="number">Number</option>
-                    </>
-                  ) : (
-                    <>
-                      <option value="short_text">Short Text</option>
-                      <option value="long_text">Long Text</option>
-                    </>
-                  )}
+                  <option value="mcq_single">Multiple Choice (Single Answer)</option>
+                  <option value="mcq_multi">Multiple Choice (Multiple Answers)</option>
+                  <option value="true_false">True/False</option>
+                  <option value="number">Number</option>
+                  <option value="short_text">Short Text</option>
+                  <option value="long_text">Long Text</option>
                 </select>
-                {test.test_type === 'auto_graded' ? (
-                  <p className="mt-1 text-xs text-gray-500">
-                    Auto-graded questions - Answers are checked automatically
-                  </p>
-                ) : (
-                  <p className="mt-1 text-xs text-gray-500">
-                    Manual-graded questions - You will review and grade each answer
-                  </p>
-                )}
+                <p className="mt-1 text-xs text-gray-500">
+                  MCQ, True/False, and Number questions are auto-graded. Text questions require manual grading.
+                </p>
               </div>
 
               <div>

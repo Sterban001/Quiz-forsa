@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { createClient } from '@/lib/supabase/client'
+import { apiClient } from '@/lib/api/client'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 
 interface Question {
@@ -31,7 +31,7 @@ export default function TakeTestPage() {
   const [timeRemaining, setTimeRemaining] = useState(0)
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
-  const supabase = createClient()
+  const [timeExpired, setTimeExpired] = useState(false)
 
   useEffect(() => {
     if (!attemptId) {
@@ -48,7 +48,8 @@ export default function TakeTestPage() {
     const timer = setInterval(() => {
       setTimeRemaining((prev) => {
         if (prev <= 1) {
-          handleSubmitTest()
+          setTimeExpired(true)
+          handleSubmitTest(true) // Auto-submit without confirmation
           return 0
         }
         return prev - 1
@@ -61,31 +62,16 @@ export default function TakeTestPage() {
   const loadTest = async () => {
     try {
       // Load test
-      const { data: testData, error: testError } = await supabase
-        .from('tests')
-        .select('*')
-        .eq('id', testId)
-        .single()
-
-      if (testError) throw testError
+      const testData = await apiClient.getTest(testId)
       setTest(testData)
       setTimeRemaining(testData.time_limit_minutes * 60)
 
       // Load questions
-      const { data: questionsData, error: questionsError } = await supabase
-        .from('questions')
-        .select(`
-          *,
-          question_options (*)
-        `)
-        .eq('test_id', testId)
-        .order('order_index')
-
-      if (questionsError) throw questionsError
+      const questionsData = await apiClient.getQuestions(testId)
 
       let processedQuestions = questionsData.map((q: any) => ({
         ...q,
-        question_options: q.question_options.sort((a: any, b: any) => a.order_index - b.order_index),
+        question_options: (q.question_options || []).sort((a: any, b: any) => a.order_index - b.order_index),
       }))
 
       // Shuffle questions if enabled
@@ -109,19 +95,17 @@ export default function TakeTestPage() {
     })
   }
 
-  const handleSubmitTest = async () => {
+  const handleSubmitTest = async (autoSubmit = false) => {
     if (submitting) return
 
-    if (!confirm('Are you sure you want to submit your test?')) return
+    // Only show confirmation if not auto-submitting due to timeout
+    if (!autoSubmit && !confirm('Are you sure you want to submit your test?')) return
 
     setSubmitting(true)
 
     try {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
-
-      // Save all answers
-      const answersToInsert = Object.entries(answers).map(([questionId, answer]) => {
+      // Save all answers using API client
+      for (const [questionId, answer] of Object.entries(answers)) {
         const question = questions.find((q) => q.id === questionId)
         let responseJson: any = {}
 
@@ -135,65 +119,11 @@ export default function TakeTestPage() {
           responseJson = { value: parseFloat(answer) || 0 }
         }
 
-        return {
-          attempt_id: attemptId,
-          question_id: questionId,
-          response_json: responseJson,
-        }
-      })
-
-      console.log('Answers to insert:', answersToInsert)
-
-      // Delete existing answers (in case of re-submission)
-      const { error: deleteError } = await supabase
-        .from('attempt_answers')
-        .delete()
-        .eq('attempt_id', attemptId)
-
-      if (deleteError) {
-        console.error('Delete error:', deleteError)
+        await apiClient.saveAnswer(attemptId!, questionId, responseJson)
       }
 
-      // Insert new answers
-      if (answersToInsert.length > 0) {
-        console.log('Inserting', answersToInsert.length, 'answers')
-        const { data: insertData, error: answersError } = await supabase
-          .from('attempt_answers')
-          .insert(answersToInsert)
-          .select()
-
-        console.log('Insert result:', { data: insertData, error: answersError })
-
-        if (answersError) {
-          console.error('Insert error details:', answersError)
-          throw answersError
-        }
-      } else {
-        console.warn('No answers to insert!')
-      }
-
-      // Mark attempt as submitted
-      const { error: updateError } = await supabase
-        .from('attempts')
-        .update({
-          status: 'submitted',
-          submitted_at: new Date().toISOString(),
-        })
-        .eq('id', attemptId)
-
-      if (updateError) throw updateError
-
-      // Only call scoring function for auto-graded tests
-      // Manual-graded tests will be scored by admin later
-      if (test.test_type === 'auto_graded') {
-        const { error: scoreError } = await supabase.rpc('calculate_attempt_score', {
-          attempt_id_param: attemptId,
-        })
-
-        if (scoreError) {
-          console.error('Scoring error:', scoreError)
-        }
-      }
+      // Submit the attempt
+      await apiClient.submitAttempt(attemptId!)
 
       router.push(`/dashboard/tests/${testId}/result?attempt=${attemptId}`)
     } catch (error: any) {
@@ -232,6 +162,11 @@ export default function TakeTestPage() {
     <div className="max-w-4xl mx-auto">
       {/* Header */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
+        {timeExpired && (
+          <div className="mb-4 p-4 bg-red-50 border border-red-200 text-red-700 rounded-lg">
+            Time has expired! Submitting your test...
+          </div>
+        )}
         <div className="flex justify-between items-center mb-4">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">{test.title}</h1>
@@ -277,7 +212,9 @@ export default function TakeTestPage() {
               {currentQuestion.question_options.map((option) => (
                 <label
                   key={option.id}
-                  className="flex items-center p-4 border-2 border-gray-200 rounded-lg cursor-pointer hover:border-blue-300 transition-colors"
+                  className={`flex items-center p-4 border-2 border-gray-200 rounded-lg transition-colors ${
+                    timeExpired ? 'cursor-not-allowed opacity-50' : 'cursor-pointer hover:border-blue-300'
+                  }`}
                 >
                   <input
                     type="radio"
@@ -285,6 +222,7 @@ export default function TakeTestPage() {
                     value={option.id}
                     checked={answers[currentQuestion.id] === option.id}
                     onChange={(e) => handleAnswerChange(currentQuestion.id, e.target.value)}
+                    disabled={timeExpired}
                     className="w-4 h-4 text-blue-600"
                   />
                   <span className="ml-3 text-gray-900">{option.label}</span>
@@ -298,7 +236,9 @@ export default function TakeTestPage() {
               {currentQuestion.question_options.map((option) => (
                 <label
                   key={option.id}
-                  className="flex items-center p-4 border-2 border-gray-200 rounded-lg cursor-pointer hover:border-blue-300 transition-colors"
+                  className={`flex items-center p-4 border-2 border-gray-200 rounded-lg transition-colors ${
+                    timeExpired ? 'cursor-not-allowed opacity-50' : 'cursor-pointer hover:border-blue-300'
+                  }`}
                 >
                   <input
                     type="checkbox"
@@ -315,6 +255,7 @@ export default function TakeTestPage() {
                         )
                       }
                     }}
+                    disabled={timeExpired}
                     className="w-4 h-4 text-blue-600"
                   />
                   <span className="ml-3 text-gray-900">{option.label}</span>
@@ -328,7 +269,9 @@ export default function TakeTestPage() {
               {currentQuestion.question_options.map((option) => (
                 <label
                   key={option.id}
-                  className="flex items-center p-4 border-2 border-gray-200 rounded-lg cursor-pointer hover:border-blue-300 transition-colors"
+                  className={`flex items-center p-4 border-2 border-gray-200 rounded-lg transition-colors ${
+                    timeExpired ? 'cursor-not-allowed opacity-50' : 'cursor-pointer hover:border-blue-300'
+                  }`}
                 >
                   <input
                     type="radio"
@@ -336,6 +279,7 @@ export default function TakeTestPage() {
                     value={option.id}
                     checked={answers[currentQuestion.id] === option.id}
                     onChange={(e) => handleAnswerChange(currentQuestion.id, e.target.value)}
+                    disabled={timeExpired}
                     className="w-4 h-4 text-blue-600"
                   />
                   <span className="ml-3 text-gray-900">{option.label}</span>
@@ -349,7 +293,8 @@ export default function TakeTestPage() {
               type="text"
               value={answers[currentQuestion.id] || ''}
               onChange={(e) => handleAnswerChange(currentQuestion.id, e.target.value)}
-              className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-blue-500 focus:outline-none"
+              disabled={timeExpired}
+              className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-blue-500 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
               placeholder="Type your answer..."
             />
           )}
@@ -358,8 +303,9 @@ export default function TakeTestPage() {
             <textarea
               value={answers[currentQuestion.id] || ''}
               onChange={(e) => handleAnswerChange(currentQuestion.id, e.target.value)}
+              disabled={timeExpired}
               rows={6}
-              className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-blue-500 focus:outline-none"
+              className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-blue-500 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
               placeholder="Type your answer..."
             />
           )}
@@ -370,7 +316,8 @@ export default function TakeTestPage() {
               step="any"
               value={answers[currentQuestion.id] || ''}
               onChange={(e) => handleAnswerChange(currentQuestion.id, e.target.value)}
-              className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-blue-500 focus:outline-none"
+              disabled={timeExpired}
+              className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-blue-500 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
               placeholder="Enter a number..."
             />
           )}
@@ -381,7 +328,7 @@ export default function TakeTestPage() {
       <div className="flex justify-between items-center gap-4">
         <button
           onClick={() => setCurrentQuestionIndex(Math.max(0, currentQuestionIndex - 1))}
-          disabled={currentQuestionIndex === 0}
+          disabled={currentQuestionIndex === 0 || timeExpired}
           className="px-6 py-3 border-2 border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
           Previous
@@ -392,13 +339,14 @@ export default function TakeTestPage() {
             <button
               key={index}
               onClick={() => setCurrentQuestionIndex(index)}
+              disabled={timeExpired}
               className={`w-10 h-10 rounded-lg font-medium transition-colors ${
                 index === currentQuestionIndex
                   ? 'bg-blue-600 text-white'
                   : answers[questions[index].id]
                   ? 'bg-green-100 text-green-800'
                   : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-              }`}
+              } ${timeExpired ? 'opacity-50 cursor-not-allowed' : ''}`}
             >
               {index + 1}
             </button>
@@ -407,8 +355,8 @@ export default function TakeTestPage() {
 
         {currentQuestionIndex === questions.length - 1 ? (
           <button
-            onClick={handleSubmitTest}
-            disabled={submitting}
+            onClick={() => handleSubmitTest()}
+            disabled={submitting || timeExpired}
             className="px-6 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             {submitting ? 'Submitting...' : 'Submit Test'}
@@ -416,7 +364,8 @@ export default function TakeTestPage() {
         ) : (
           <button
             onClick={() => setCurrentQuestionIndex(Math.min(questions.length - 1, currentQuestionIndex + 1))}
-            className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors"
+            disabled={timeExpired}
+            className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             Next
           </button>

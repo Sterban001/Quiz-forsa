@@ -1,25 +1,78 @@
-import { createClient } from '@/lib/supabase/server'
+'use client'
+
+import { useState, useEffect } from 'react'
+import { apiClient } from '@/lib/api/client'
+import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 
-export default async function QuestionsPage() {
-  const supabase = await createClient()
+export default function QuestionsPage() {
+  const router = useRouter()
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [questions, setQuestions] = useState<any[]>([])
 
-  const { data: questions, error } = await supabase
-    .from('questions')
-    .select(`
-      id,
-      type,
-      prompt,
-      points,
-      order_index,
-      created_at,
-      tests (
-        id,
-        title
-      )
-    `)
-    .order('created_at', { ascending: false })
-    .limit(50)
+  useEffect(() => {
+    loadQuestions()
+  }, [])
+
+  const loadQuestions = async () => {
+    try {
+      setLoading(true)
+      setError(null)
+
+      // Note: The API doesn't have a "get all questions" endpoint
+      // So we need to get tests first, then questions for each test
+      const tests = await apiClient.getTests()
+
+      // Get questions from all tests
+      const allQuestions: any[] = []
+      for (const test of tests) {
+        const testQuestions = await apiClient.getQuestions(test.id)
+        testQuestions.forEach((q: any) => {
+          allQuestions.push({
+            ...q,
+            test: {
+              id: test.id,
+              title: test.title
+            }
+          })
+        })
+      }
+
+      // Sort by created_at descending and limit to 50
+      const sortedQuestions = allQuestions
+        .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+        .slice(0, 50)
+
+      setQuestions(sortedQuestions)
+    } catch (err: any) {
+      console.error('Error loading questions:', err)
+      setError(err.message || 'Failed to load questions')
+      if (err.message?.includes('unauthorized') || err.message?.includes('not authenticated')) {
+        router.push('/login')
+      }
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="p-8 flex items-center justify-center">
+        <div className="text-gray-600">Loading questions...</div>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="p-8">
+        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded mb-4">
+          Error loading questions: {error}
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="p-8">
@@ -30,13 +83,7 @@ export default async function QuestionsPage() {
         </div>
       </div>
 
-      {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded mb-4">
-          Error loading questions: {error.message}
-        </div>
-      )}
-
-      {questions && questions.length === 0 && (
+      {questions.length === 0 && (
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-12 text-center">
           <div className="max-w-sm mx-auto">
             <svg
@@ -64,7 +111,7 @@ export default async function QuestionsPage() {
         </div>
       )}
 
-      {questions && questions.length > 0 && (
+      {questions.length > 0 && (
         <div className="bg-white rounded-lg shadow-sm border border-gray-200">
           <div className="overflow-x-auto">
             <table className="w-full">
@@ -97,10 +144,10 @@ export default async function QuestionsPage() {
                     </td>
                     <td className="px-6 py-4">
                       <Link
-                        href={`/dashboard/tests/${question.tests?.id}`}
+                        href={`/dashboard/tests/${question.test?.id}`}
                         className="text-sm text-blue-600 hover:text-blue-800"
                       >
-                        {question.tests?.title || 'Unknown Test'}
+                        {question.test?.title || 'Unknown Test'}
                       </Link>
                     </td>
                     <td className="px-6 py-4">

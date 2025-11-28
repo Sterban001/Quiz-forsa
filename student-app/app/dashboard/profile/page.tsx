@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { createClient } from '@/lib/supabase/client'
+import { apiClient } from '@/lib/api/client'
 
 export default function ProfilePage() {
   const [user, setUser] = useState<any>(null)
@@ -13,7 +13,6 @@ export default function ProfilePage() {
     passedTests: 0,
   })
   const [loading, setLoading] = useState(true)
-  const supabase = createClient()
 
   useEffect(() => {
     loadProfile()
@@ -21,34 +20,18 @@ export default function ProfilePage() {
 
   const loadProfile = async () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
-
-      setUser(user)
-
-      // Load profile
-      const { data: profileData } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', user.id)
-        .single()
-
+      const { user: userData, profile: profileData } = await apiClient.getCurrentUser()
+      setUser(userData)
       setProfile(profileData)
 
       // Load stats
-      const { data: attempts } = await supabase
-        .from('attempts')
-        .select(`
-          *,
-          tests (pass_score)
-        `)
-        .eq('user_id', user.id)
+      const attempts = await apiClient.getAttempts()
 
       if (attempts) {
-        const completed = attempts.filter((a) => a.status === 'completed')
-        const passed = completed.filter((a) => a.score_percentage >= a.tests.pass_score)
+        const completed = attempts.filter((a: any) => a.status === 'graded')
+        const passed = completed.filter((a: any) => a.score >= (a.max_score * 0.7)) // Assuming 70% pass score
         const avgScore = completed.length > 0
-          ? Math.round(completed.reduce((sum, a) => sum + a.score_percentage, 0) / completed.length)
+          ? Math.round(completed.reduce((sum: number, a: any) => sum + ((a.score / a.max_score) * 100), 0) / completed.length)
           : 0
 
         setStats({

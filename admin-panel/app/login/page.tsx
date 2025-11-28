@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { createClient } from '@/lib/supabase/client'
+import { apiClient } from '@/lib/api/client'
 import { useRouter } from 'next/navigation'
 
 export default function LoginPage() {
@@ -13,7 +13,6 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const router = useRouter()
-  const supabase = createClient()
 
   const handlePasswordLogin = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -21,24 +20,11 @@ export default function LoginPage() {
     setError(null)
 
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      })
-
-      if (error) throw error
+      const data = await apiClient.login(email, password)
 
       // Check if user is admin
-      const { data: profile, error: profileError } = await supabase
-        .from('profiles')
-        .select('role')
-        .eq('id', data.user?.id)
-        .single()
-
-      if (profileError) throw profileError
-
-      if (profile?.role !== 'admin') {
-        await supabase.auth.signOut()
+      if (data.profile?.role !== 'admin') {
+        await apiClient.logout()
         throw new Error('Access denied. Admin role required.')
       }
 
@@ -57,15 +43,7 @@ export default function LoginPage() {
     setError(null)
 
     try {
-      const { error } = await supabase.auth.signInWithOtp({
-        email,
-        options: {
-          shouldCreateUser: false,
-        },
-      })
-
-      if (error) throw error
-
+      await apiClient.sendOtp(email)
       setStep('otp')
     } catch (err: any) {
       setError(err.message || 'Failed to send OTP')
@@ -80,25 +58,11 @@ export default function LoginPage() {
     setError(null)
 
     try {
-      const { data, error } = await supabase.auth.verifyOtp({
-        email,
-        token: otp,
-        type: 'email',
-      })
-
-      if (error) throw error
+      const data = await apiClient.verifyOtp(email, otp)
 
       // Check if user is admin
-      const { data: profile, error: profileError } = await supabase
-        .from('profiles')
-        .select('role')
-        .eq('id', data.user?.id)
-        .single()
-
-      if (profileError) throw profileError
-
-      if (profile?.role !== 'admin') {
-        await supabase.auth.signOut()
+      if (data.profile?.role !== 'admin') {
+        await apiClient.logout()
         throw new Error('Access denied. Admin role required.')
       }
 

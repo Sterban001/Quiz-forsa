@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { createClient } from '@/lib/supabase/client'
+import { apiClient } from '@/lib/api/client'
 import Link from 'next/link'
 
 interface Test {
@@ -13,14 +13,12 @@ interface Test {
   pass_score: number
   max_attempts: number
   tags: string[]
-  test_type: string
 }
 
 export default function DashboardPage() {
   const [tests, setTests] = useState<Test[]>([])
   const [loading, setLoading] = useState(true)
   const [attemptCounts, setAttemptCounts] = useState<Record<string, number>>({})
-  const supabase = createClient()
 
   useEffect(() => {
     loadTests()
@@ -28,31 +26,20 @@ export default function DashboardPage() {
 
   const loadTests = async () => {
     try {
-      // Get current user
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
-
       // Load published tests
-      const { data: testsData, error: testsError } = await supabase
-        .from('tests')
-        .select('*')
-        .eq('status', 'published')
-        .eq('visibility', 'public')
-        .order('created_at', { ascending: false })
-
-      if (testsError) throw testsError
+      const testsData = await apiClient.getTests({
+        status: 'published',
+        visibility: 'public'
+      })
 
       setTests(testsData || [])
 
       // Load attempt counts for each test
-      const { data: attemptsData } = await supabase
-        .from('attempts')
-        .select('test_id')
-        .eq('user_id', user.id)
+      const attemptsData = await apiClient.getAttempts()
 
       if (attemptsData) {
         const counts: Record<string, number> = {}
-        attemptsData.forEach((attempt) => {
+        attemptsData.forEach((attempt: any) => {
           counts[attempt.test_id] = (counts[attempt.test_id] || 0) + 1
         })
         setAttemptCounts(counts)
@@ -154,7 +141,6 @@ export default function DashboardPage() {
         {tests.map((test) => {
           const attemptCount = attemptCounts[test.id] || 0
           const canAttempt = attemptCount < test.max_attempts
-          const isManualGraded = test.test_type === 'manual_graded'
 
           return (
             <div
@@ -173,11 +159,6 @@ export default function DashboardPage() {
                 <div className="mb-4">
                   <div className="flex items-start justify-between mb-2">
                     <h3 className="text-xl font-bold text-gray-900 flex-1 line-clamp-2">{test.title}</h3>
-                    {isManualGraded && (
-                      <span className="ml-2 px-2 py-1 bg-orange-100 text-orange-700 text-xs font-semibold rounded-full whitespace-nowrap">
-                        Manual Review
-                      </span>
-                    )}
                   </div>
                   <p className="text-gray-600 text-sm line-clamp-2 leading-relaxed">{test.description}</p>
                 </div>

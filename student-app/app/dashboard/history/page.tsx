@@ -1,13 +1,12 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { createClient } from '@/lib/supabase/client'
+import { apiClient } from '@/lib/api/client'
 import Link from 'next/link'
 
 export default function HistoryPage() {
   const [attempts, setAttempts] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
-  const supabase = createClient()
 
   useEffect(() => {
     loadHistory()
@@ -15,26 +14,7 @@ export default function HistoryPage() {
 
   const loadHistory = async () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
-
-      const { data, error } = await supabase
-        .from('attempts')
-        .select(`
-          *,
-          tests (
-            id,
-            title,
-            category,
-            pass_score,
-            test_type
-          )
-        `)
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false })
-
-      if (error) throw error
-
+      const data = await apiClient.getAttempts()
       setAttempts(data || [])
     } catch (error: any) {
       console.error('Error loading history:', error)
@@ -94,10 +74,7 @@ export default function HistoryPage() {
   const stats = {
     total: attempts.length,
     completed: attempts.filter((a) => a.status === 'graded').length,
-    pending: attempts.filter((a) => {
-      const isManualGraded = a.tests.test_type === 'manual_graded'
-      return isManualGraded && a.status === 'submitted'
-    }).length,
+    pending: attempts.filter((a) => a.status === 'submitted').length,
     passed: attempts.filter((a) => {
       if (a.status !== 'graded') return false
       const percentage = a.max_score > 0 ? (a.score / a.max_score) * 100 : 0
@@ -217,8 +194,7 @@ export default function HistoryPage() {
               {attempts.map((attempt) => {
                 const percentage = attempt.max_score > 0 ? Math.round((attempt.score / attempt.max_score) * 100) : 0
                 const passed = percentage >= attempt.tests.pass_score
-                const isManualGraded = attempt.tests.test_type === 'manual_graded'
-                const isPendingReview = isManualGraded && attempt.status === 'submitted'
+                const isPendingReview = attempt.status === 'submitted'
                 const isCompleted = attempt.status === 'graded'
 
                 return (

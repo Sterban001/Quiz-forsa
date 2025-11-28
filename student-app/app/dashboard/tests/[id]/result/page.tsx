@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { createClient } from '@/lib/supabase/client'
+import { apiClient } from '@/lib/api/client'
 import { useParams, useSearchParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 
@@ -15,7 +15,6 @@ export default function ResultPage() {
   const [attempt, setAttempt] = useState<any>(null)
   const [test, setTest] = useState<any>(null)
   const [loading, setLoading] = useState(true)
-  const supabase = createClient()
 
   useEffect(() => {
     if (!attemptId) {
@@ -28,23 +27,11 @@ export default function ResultPage() {
   const loadResults = async () => {
     try {
       // Load attempt
-      const { data: attemptData, error: attemptError } = await supabase
-        .from('attempts')
-        .select('*')
-        .eq('id', attemptId)
-        .single()
-
-      if (attemptError) throw attemptError
+      const attemptData = await apiClient.getAttempt(attemptId!)
       setAttempt(attemptData)
 
       // Load test
-      const { data: testData, error: testError } = await supabase
-        .from('tests')
-        .select('*')
-        .eq('id', testId)
-        .single()
-
-      if (testError) throw testError
+      const testData = await apiClient.getTest(testId)
       setTest(testData)
     } catch (error: any) {
       console.error('Error loading results:', error)

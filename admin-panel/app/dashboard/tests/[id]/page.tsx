@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { createClient } from '@/lib/supabase/client'
+import { apiClient } from '@/lib/api/client'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 
@@ -30,14 +30,13 @@ interface Test {
   title: string
   description: string
   category: string
-  time_limit: number
+  time_limit_minutes: number
   pass_score: number
   status: 'draft' | 'published' | 'archived'
-  visibility: 'public' | 'private' | 'whitelist_only'
+  visibility: 'public' | 'private' | 'unlisted'
   shuffle_questions: boolean
-  shuffle_options: boolean
-  show_answers: boolean
-  allow_review: boolean
+  show_correct_answers: boolean
+  show_explanations: boolean
   negative_marking: boolean
   created_at: string
   updated_at: string
@@ -46,10 +45,10 @@ interface Test {
 export default function ViewTestDetailsPage() {
   const params = useParams()
   const router = useRouter()
-  const supabase = createClient()
   const testId = params.id as string
 
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [test, setTest] = useState<Test | null>(null)
   const [questions, setQuestions] = useState<Question[]>([])
 
@@ -59,27 +58,15 @@ export default function ViewTestDetailsPage() {
 
   const loadTest = async () => {
     try {
-      // Fetch test details
-      const { data: testData, error: testError } = await supabase
-        .from('tests')
-        .select('*')
-        .eq('id', testId)
-        .single()
+      setLoading(true)
+      setError(null)
 
-      if (testError) throw testError
+      // Fetch test details
+      const testData = await apiClient.getTest(testId)
       setTest(testData)
 
-      // Fetch questions with options
-      const { data: questionsData, error: questionsError } = await supabase
-        .from('questions')
-        .select(`
-          *,
-          question_options (*)
-        `)
-        .eq('test_id', testId)
-        .order('order_index')
-
-      if (questionsError) throw questionsError
+      // Fetch questions
+      const questionsData = await apiClient.getQuestions(testId)
 
       const formattedQuestions = questionsData.map((q: any) => ({
         id: q.id,
@@ -100,9 +87,12 @@ export default function ViewTestDetailsPage() {
       }))
 
       setQuestions(formattedQuestions)
-    } catch (error) {
-      console.error('Error loading test:', error)
-      alert('Failed to load test details')
+    } catch (err: any) {
+      console.error('Error loading test:', err)
+      setError(err.message || 'Failed to load test details')
+      if (err.message?.includes('unauthorized') || err.message?.includes('not authenticated')) {
+        router.push('/login')
+      }
     } finally {
       setLoading(false)
     }
@@ -137,11 +127,11 @@ export default function ViewTestDetailsPage() {
     const colors = {
       public: 'bg-blue-100 text-blue-800',
       private: 'bg-purple-100 text-purple-800',
-      whitelist_only: 'bg-orange-100 text-orange-800',
+      unlisted: 'bg-orange-100 text-orange-800',
     }
     return (
       <span className={`px-2 py-1 rounded-full text-xs font-medium ${colors[visibility as keyof typeof colors] || 'bg-gray-100 text-gray-800'}`}>
-        {visibility.replace('_', ' ')}
+        {visibility}
       </span>
     )
   }
@@ -150,6 +140,19 @@ export default function ViewTestDetailsPage() {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-lg">Loading test details...</div>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <div className="text-lg text-red-600 mb-4">{error}</div>
+          <Link href="/dashboard/tests" className="text-blue-600 hover:text-blue-800">
+            Back to Tests
+          </Link>
+        </div>
       </div>
     )
   }
@@ -222,7 +225,7 @@ export default function ViewTestDetailsPage() {
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Time Limit
             </label>
-            <p className="text-gray-900">{test.time_limit} minutes</p>
+            <p className="text-gray-900">{test.time_limit_minutes} minutes</p>
           </div>
 
           <div>
@@ -274,29 +277,20 @@ export default function ViewTestDetailsPage() {
             <div className="flex items-center">
               <input
                 type="checkbox"
-                checked={test.shuffle_options}
+                checked={test.show_correct_answers}
                 disabled
                 className="h-4 w-4 text-blue-600 rounded"
               />
-              <label className="ml-2 text-sm text-gray-700">Shuffle Options</label>
+              <label className="ml-2 text-sm text-gray-700">Show Correct Answers</label>
             </div>
             <div className="flex items-center">
               <input
                 type="checkbox"
-                checked={test.show_answers}
+                checked={test.show_explanations}
                 disabled
                 className="h-4 w-4 text-blue-600 rounded"
               />
-              <label className="ml-2 text-sm text-gray-700">Show Answers</label>
-            </div>
-            <div className="flex items-center">
-              <input
-                type="checkbox"
-                checked={test.allow_review}
-                disabled
-                className="h-4 w-4 text-blue-600 rounded"
-              />
-              <label className="ml-2 text-sm text-gray-700">Allow Review</label>
+              <label className="ml-2 text-sm text-gray-700">Show Explanations</label>
             </div>
             <div className="flex items-center">
               <input

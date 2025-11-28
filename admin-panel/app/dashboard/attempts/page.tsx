@@ -1,31 +1,55 @@
-import { createClient } from '@/lib/supabase/server'
+'use client'
+
+import { useState, useEffect } from 'react'
+import { apiClient } from '@/lib/api/client'
+import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 
-export default async function AttemptsPage() {
-  const supabase = await createClient()
+export default function AttemptsPage() {
+  const router = useRouter()
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [attempts, setAttempts] = useState<any[]>([])
 
-  const { data: attempts, error } = await supabase
-    .from('attempts')
-    .select(`
-      id,
-      status,
-      score,
-      max_score,
-      started_at,
-      submitted_at,
-      duration_seconds,
-      attempt_no,
-      tests (
-        id,
-        title
-      ),
-      profiles (
-        id,
-        display_name
-      )
-    `)
-    .order('started_at', { ascending: false })
-    .limit(100)
+  useEffect(() => {
+    loadAttempts()
+  }, [])
+
+  const loadAttempts = async () => {
+    try {
+      setLoading(true)
+      setError(null)
+
+      const data = await apiClient.getAttempts()
+      setAttempts(data)
+    } catch (err: any) {
+      console.error('Error loading attempts:', err)
+      setError(err.message || 'Failed to load attempts')
+      if (err.message?.includes('unauthorized') || err.message?.includes('not authenticated')) {
+        router.push('/login')
+      }
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="p-8 flex items-center justify-center">
+        <div className="text-gray-600">Loading attempts...</div>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="p-8">
+        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded mb-4">
+          Error loading attempts: {error}
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="p-8">
@@ -34,13 +58,7 @@ export default async function AttemptsPage() {
         <p className="text-gray-600 mt-1">View and manage all test submissions</p>
       </div>
 
-      {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded mb-4">
-          Error loading attempts: {error.message}
-        </div>
-      )}
-
-      {attempts && attempts.length === 0 && (
+      {attempts.length === 0 && (
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-12 text-center">
           <div className="max-w-sm mx-auto">
             <svg
@@ -62,7 +80,7 @@ export default async function AttemptsPage() {
         </div>
       )}
 
-      {attempts && attempts.length > 0 && (
+      {attempts.length > 0 && (
         <div className="bg-white rounded-lg shadow-sm border border-gray-200">
           <div className="overflow-x-auto">
             <table className="w-full">
@@ -96,15 +114,15 @@ export default async function AttemptsPage() {
                   <tr key={attempt.id} className="hover:bg-gray-50">
                     <td className="px-6 py-4">
                       <div className="text-sm font-medium text-gray-900">
-                        {attempt.profiles?.display_name || 'Unknown User'}
+                        {attempt.profiles?.display_name || attempt.user?.display_name || 'Unknown User'}
                       </div>
                     </td>
                     <td className="px-6 py-4">
                       <Link
-                        href={`/dashboard/tests/${attempt.tests?.id}`}
+                        href={`/dashboard/tests/${attempt.tests?.id || attempt.test?.id}`}
                         className="text-sm text-blue-600 hover:text-blue-800"
                       >
-                        {attempt.tests?.title || 'Unknown Test'}
+                        {attempt.tests?.title || attempt.test?.title || 'Unknown Test'}
                       </Link>
                     </td>
                     <td className="px-6 py-4">
@@ -122,7 +140,7 @@ export default async function AttemptsPage() {
                     </td>
                     <td className="px-6 py-4">
                       <div className="text-sm text-gray-900">
-                        {attempt.score !== null ? (
+                        {attempt.score !== null && attempt.score !== undefined ? (
                           <>
                             {attempt.score.toFixed(1)} / {attempt.max_score.toFixed(1)}
                             <span className="text-gray-500 ml-2">
