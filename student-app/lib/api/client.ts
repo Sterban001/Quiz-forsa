@@ -120,6 +120,23 @@ class ApiClient {
     return this.request<{ user: any; profile: any }>('/auth/me')
   }
 
+  async forgotPassword(email: string) {
+    return this.request<{ message: string }>('/auth/forgot-password', {
+      method: 'POST',
+      body: JSON.stringify({ email }),
+    })
+  }
+
+  async resetPassword(password: string, token: string) {
+    return this.request<{ message: string }>('/auth/reset-password', {
+      method: 'POST',
+      body: JSON.stringify({ password }),
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    })
+  }
+
   // Test endpoints
   async getTests(filters?: { status?: string; visibility?: string; category?: string }) {
     const params = new URLSearchParams(filters as any)
