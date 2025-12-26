@@ -111,19 +111,41 @@ app.use(notFoundHandler)
 app.use(errorHandler)
 
 // Initialize Redis and start server
-async function startServer() {
-  // Try to connect to Redis (non-blocking)
-  await connectRedis()
+// Initialize Redis and start server
+async function initializeServices() {
+  if (!isRedisAvailable()) {
+    await connectRedis()
+  }
+}
 
-  // Start server
-  app.listen(PORT, () => {
-    console.log(`🚀 Backend API server running on http://localhost:${PORT}`)
-    console.log(`📊 Environment: ${process.env.NODE_ENV || 'development'}`)
-    console.log(`💾 Redis: ${isRedisAvailable() ? 'Connected ✓' : 'Not available (running without cache)'}`)
+// Local development startup
+if (require.main === module) {
+  initializeServices().then(() => {
+    app.listen(PORT, () => {
+      console.log(`🚀 Backend API server running on http://localhost:${PORT}`)
+      console.log(`📊 Environment: ${process.env.NODE_ENV || 'development'}`)
+      console.log(`💾 Redis: ${isRedisAvailable() ? 'Connected ✓' : 'Not available (running without cache)'}`)
+    })
+  }).catch((error) => {
+    console.error('Failed to start server:', error)
+    process.exit(1)
   })
 }
 
-startServer().catch((error) => {
-  console.error('Failed to start server:', error)
-  process.exit(1)
+// For Vercel/Serverless
+// Ensure Redis is connected on every request (or reused if container is warm)
+app.use(async (_req, _res, next) => {
+  if (!isRedisAvailable()) {
+    try {
+      await connectRedis()
+    } catch (error) {
+      console.error('Redis connection failed:', error)
+      // Continue without Redis if it fails, or handle error
+    }
+  }
+  next()
 })
+
+export { app }
+export default app
+
