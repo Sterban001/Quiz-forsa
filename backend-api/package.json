@@ -5,7 +5,8 @@
   "main": "dist/index.js",
   "scripts": {
     "dev": "tsx watch src/index.ts",
-    "build": "tsc",
+    "build": "echo 'No build step required for Vercel Serverless'",
+    "type-check": "tsc",
     "start": "node dist/index.js",
     "lint": "eslint src --ext .ts"
   },
