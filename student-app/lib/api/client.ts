@@ -127,13 +127,10 @@ class ApiClient {
     })
   }
 
-  async resetPassword(password: string, token: string) {
+  async resetPassword(password: string) {
     return this.request<{ message: string }>('/auth/reset-password', {
       method: 'POST',
       body: JSON.stringify({ password }),
-      headers: {
-        'Authorization': `Bearer ${token}`
-      }
     })
   }
 
