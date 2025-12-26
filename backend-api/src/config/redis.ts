@@ -41,6 +41,12 @@ redisClient.on('end', () => {
 // Connect to Redis
 export async function connectRedis() {
   try {
+    // Prevent connecting to localhost Redis in production (Vercel)
+    if (process.env.NODE_ENV === 'production' && REDIS_URL.includes('localhost')) {
+      console.warn('Skipping Redis connection: Cannot connect to localhost in production.')
+      return
+    }
+
     if (!redisClient.isOpen) {
       // Add a timeout to prevent hanging the serverless function
       const timeout = new Promise((_, reject) =>
