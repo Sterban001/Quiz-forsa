@@ -42,7 +42,15 @@ redisClient.on('end', () => {
 export async function connectRedis() {
   try {
     if (!redisClient.isOpen) {
-      await redisClient.connect()
+      // Add a timeout to prevent hanging the serverless function
+      const timeout = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Redis connection timeout')), 2000)
+      )
+
+      await Promise.race([
+        redisClient.connect(),
+        timeout
+      ])
     }
   } catch (error) {
     console.error('Failed to connect to Redis:', error)
