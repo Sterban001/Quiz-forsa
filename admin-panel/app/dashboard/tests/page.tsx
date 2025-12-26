@@ -109,27 +109,30 @@ export default function TestsPage() {
                   <div className="flex items-center gap-3 mb-2">
                     <h3 className="text-xl font-semibold text-gray-900">{test.title}</h3>
                     <span
-                      className={`px-3 py-1 rounded-full text-xs font-medium ${
-                        test.status === 'published'
-                          ? 'bg-green-100 text-green-800'
-                          : test.status === 'draft'
+                      className={`px-3 py-1 rounded-full text-xs font-medium ${test.status === 'published'
+                        ? 'bg-green-100 text-green-800'
+                        : test.status === 'draft'
                           ? 'bg-yellow-100 text-yellow-800'
                           : 'bg-gray-100 text-gray-800'
-                      }`}
+                        }`}
                     >
                       {test.status}
                     </span>
                     <span
-                      className={`px-3 py-1 rounded-full text-xs font-medium ${
-                        test.visibility === 'public'
-                          ? 'bg-blue-100 text-blue-800'
-                          : test.visibility === 'private'
+                      className={`px-3 py-1 rounded-full text-xs font-medium ${test.visibility === 'public'
+                        ? 'bg-blue-100 text-blue-800'
+                        : test.visibility === 'private'
                           ? 'bg-purple-100 text-purple-800'
                           : 'bg-orange-100 text-orange-800'
-                      }`}
+                        }`}
                     >
                       {test.visibility}
                     </span>
+                    {!test.results_released && test.status === 'published' && (
+                      <span className="px-3 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                        Results Pending
+                      </span>
+                    )}
                   </div>
                   <p className="text-gray-600 mb-3">{test.description || 'No description'}</p>
                   <div className="flex items-center gap-4 text-sm text-gray-500">
@@ -173,6 +176,26 @@ export default function TestsPage() {
                   </div>
                 </div>
                 <div className="flex gap-2">
+                  {!test.results_released && test.status === 'published' && (
+                    <button
+                      onClick={async () => {
+                        if (confirm('Release results for all attempts of this test?')) {
+                          try {
+                            await apiClient.releaseTestResults(test.id)
+                            alert('Results released successfully!')
+                            // Refresh tests list
+                            const data = await apiClient.getTests()
+                            setTests(data)
+                          } catch (err: any) {
+                            alert('Failed to release results: ' + err.message)
+                          }
+                        }
+                      }}
+                      className="px-4 py-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors font-medium"
+                    >
+                      Release Results
+                    </button>
+                  )}
                   <Link
                     href={`/dashboard/tests/${test.id}/edit`}
                     className="px-4 py-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"

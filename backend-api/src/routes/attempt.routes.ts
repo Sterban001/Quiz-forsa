@@ -15,9 +15,9 @@ router.get('/', authenticate, async (req: AuthRequest, res) => {
     const [from, to] = getSupabaseRange(page, limit)
     const isAdmin = req.user!.role === 'admin'
 
-    let query = supabase
+    let query = supabaseAdmin
       .from('attempts')
-      .select('*, tests(title), profiles(display_name, avatar_url)', { count: 'exact' })
+      .select('*, tests(title, pass_score, results_released), profiles(display_name, avatar_url)', { count: 'exact' })
       .order('created_at', { ascending: false })
       .range(from, to)
 
@@ -66,6 +66,21 @@ router.get('/:id', authenticate, validateUuid('id'), async (req: AuthRequest, re
       return res.status(403).json({
         success: false,
         error: { message: 'Access denied' }
+      })
+    }
+
+    // Hide results if not released (for non-admin users)
+    if (!isAdmin && !attempt.tests.results_released && attempt.status === 'submitted') {
+      // Return attempt with scores/answers hidden
+      return res.json({
+        success: true,
+        data: {
+          ...attempt,
+          score: null,
+          max_score: null,
+          attempt_answers: null,
+          results_pending: true
+        }
       })
     }
 
@@ -158,10 +173,10 @@ router.post('/:id/submit', authenticate, validateUuid('id'), async (req: AuthReq
   try {
     const { id } = req.params
 
-    // Verify attempt belongs to user
+    // Verify attempt belongs to user and get test info
     const { data: attempt } = await supabaseAdmin
       .from('attempts')
-      .select('user_id, test_id')
+      .select('user_id, test_id, tests(results_released)')
       .eq('id', id)
       .single()
 
@@ -179,11 +194,15 @@ router.post('/:id/submit', authenticate, validateUuid('id'), async (req: AuthReq
 
     if (error) throw error
 
+    // Determine status based on results_released flag
+    const test = attempt.tests as any
+    const newStatus = test?.results_released ? 'graded' : 'submitted'
+
     // Update attempt status
     const { data: updatedAttempt, error: updateError } = await supabaseAdmin
       .from('attempts')
       .update({
-        status: 'submitted',
+        status: newStatus,
         submitted_at: new Date().toISOString()
       })
       .eq('id', id)
@@ -202,3 +221,4 @@ router.post('/:id/submit', authenticate, validateUuid('id'), async (req: AuthReq
 })
 
 export default router
+

@@ -23,6 +23,7 @@ export default function NewTestPage() {
     shuffle_questions: false,
     show_correct_answers: true,
     show_explanations: true,
+    results_released: false,
   })
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -52,7 +53,7 @@ export default function NewTestPage() {
     setFormData(prev => ({
       ...prev,
       [name]: type === 'checkbox' ? (e.target as HTMLInputElement).checked :
-              type === 'number' ? parseInt(value) || 0 : value
+        type === 'number' ? parseInt(value) || 0 : value
     }))
   }
 
@@ -247,6 +248,23 @@ export default function NewTestPage() {
               className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
             />
             <span className="text-sm font-medium text-gray-700">Show Explanations</span>
+          </label>
+
+          <label className="flex items-start gap-2">
+            <input
+              type="checkbox"
+              name="results_released"
+              checked={formData.results_released}
+              onChange={handleChange}
+              className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 mt-0.5"
+            />
+            <div>
+              <span className="text-sm font-medium text-gray-700">Auto-Release Results</span>
+              <p className="text-xs text-gray-500 mt-1">
+                If unchecked, students won't see their scores until you manually release results.
+                Useful for reviewing auto-graded tests before showing results.
+              </p>
+            </div>
           </label>
         </div>
 

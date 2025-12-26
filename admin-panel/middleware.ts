@@ -5,27 +5,31 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api'
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
 
-  // Allow access to login page without auth
-  if (pathname === '/login') {
-    // If user has token, verify it and redirect to dashboard if valid
-    const token = request.cookies.get('auth_token')?.value
+  // Allow access to public pages without auth
+  const publicPaths = ['/login', '/forgot-password', '/reset-password', '/auth/callback']
 
-    if (token) {
-      try {
-        const response = await fetch(`${API_URL}/auth/me`, {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-          },
-        })
+  if (publicPaths.includes(pathname)) {
+    // If user has token on login page, verify it and redirect to dashboard if valid
+    if (pathname === '/login') {
+      const token = request.cookies.get('auth_token')?.value
 
-        if (response.ok) {
-          const data = await response.json()
-          if (data.success && data.data.profile?.role === 'admin') {
-            return NextResponse.redirect(new URL('/dashboard', request.url))
+      if (token) {
+        try {
+          const response = await fetch(`${API_URL}/auth/me`, {
+            headers: {
+              'Authorization': `Bearer ${token}`,
+            },
+          })
+
+          if (response.ok) {
+            const data = await response.json()
+            if (data.success && data.data.profile?.role === 'admin') {
+              return NextResponse.redirect(new URL('/dashboard', request.url))
+            }
           }
+        } catch (error) {
+          // Token is invalid, continue to login page
         }
-      } catch (error) {
-        // Token is invalid, continue to login page
       }
     }
 

@@ -230,4 +230,85 @@ router.post('/:id/clone', authenticate, requireAdmin, createLimiter, validateUui
   }
 })
 
+// Release results for entire test (admin only)
+router.post('/:id/release-results', authenticate, requireAdmin, validateUuid('id'), async (req: AuthRequest, res) => {
+  try {
+    const { id } = req.params
+
+    // Update test to mark results as released
+    const { error: testError } = await supabaseAdmin
+      .from('tests')
+      .update({
+        results_released: true,
+        results_release_date: new Date().toISOString()
+      })
+      .eq('id', id)
+
+    if (testError) throw testError
+
+    // Update all submitted attempts for this test to graded status
+    const { data: attempts, error: attemptsError } = await supabaseAdmin
+      .from('attempts')
+      .update({ status: 'graded' })
+      .eq('test_id', id)
+      .eq('status', 'submitted')
+      .select()
+
+    if (attemptsError) throw attemptsError
+
+    return res.json({
+      success: true,
+      data: {
+        message: 'Results released successfully',
+        affected_attempts: attempts?.length || 0
+      }
+    })
+  } catch (error: any) {
+    return res.status(500).json({
+      success: false,
+      error: { message: error.message }
+    })
+  }
+})
+
+// Release results for individual attempt (admin only)
+router.post('/attempts/:attemptId/release-result', authenticate, requireAdmin, validateUuid('attemptId'), async (req: AuthRequest, res) => {
+  try {
+    const { attemptId } = req.params
+
+    // Update attempt status to graded
+    const { data: attempt, error } = await supabaseAdmin
+      .from('attempts')
+      .update({ status: 'graded' })
+      .eq('id', attemptId)
+      .eq('status', 'submitted')
+      .select()
+      .single()
+
+    if (error) throw error
+
+    if (!attempt) {
+      return res.status(404).json({
+        success: false,
+        error: { message: 'Attempt not found or already graded' }
+      })
+    }
+
+    return res.json({
+      success: true,
+      data: {
+        message: 'Result released successfully',
+        attempt
+      }
+    })
+  } catch (error: any) {
+    return res.status(500).json({
+      success: false,
+      error: { message: error.message }
+    })
+  }
+})
+
 export default router
+
+

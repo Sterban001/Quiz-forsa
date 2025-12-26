@@ -123,6 +123,12 @@ export const createTestSchema = Joi.object({
     .messages({
       'number.min': 'Per-question time limit must be at least 1 second',
       'number.integer': 'Per-question time limit must be a whole number'
+    }),
+
+  results_released: Joi.boolean()
+    .default(false)
+    .messages({
+      'boolean.base': 'Results released must be a boolean value'
     })
 })
 
@@ -143,7 +149,8 @@ export const updateTestSchema = Joi.object({
   start_at: Joi.date().iso().allow(null),
   end_at: Joi.date().iso().min(Joi.ref('start_at')).allow(null),
   access_code: Joi.string().max(50).trim().allow('', null),
-  per_question_time_seconds: Joi.number().integer().min(1).allow(null)
+  per_question_time_seconds: Joi.number().integer().min(1).allow(null),
+  results_released: Joi.boolean()
 })
 
 // UUID validation helper

@@ -59,8 +59,13 @@ export default function ResultPage() {
 
   const isManualGraded = test.test_type === 'manual_graded'
   const isPendingReview = isManualGraded && attempt.status !== 'graded'
+
+  // Check if results are pending admin approval (for auto-graded tests)
+  // Use optional chaining and default to true if field doesn't exist (backward compatibility)
+  const isResultsPending = (test.results_released === false) && attempt.status === 'submitted' && !isManualGraded
+
   const scorePercentage = attempt.max_score > 0 ? Math.round((attempt.score / attempt.max_score) * 100) : 0
-  const passed = scorePercentage >= test.pass_score
+  const passed = scorePercentage >= Number(test.pass_score)
   const timeTaken = attempt.submitted_at && attempt.started_at
     ? Math.round((new Date(attempt.submitted_at).getTime() - new Date(attempt.started_at).getTime()) / 1000 / 60)
     : null
@@ -68,8 +73,8 @@ export default function ResultPage() {
   return (
     <div className="max-w-4xl mx-auto">
       <div className="bg-white rounded-lg shadow-lg border border-gray-200 p-8">
-        {/* Pending Review State for Manual-Graded Tests */}
-        {isPendingReview ? (
+        {/* Pending Review State for Manual-Graded Tests OR Unreleased Results */}
+        {(isPendingReview || isResultsPending) ? (
           <>
             <div className="text-center mb-8">
               <div className="inline-flex items-center justify-center w-20 h-20 rounded-full mb-4 bg-yellow-100">
@@ -89,18 +94,34 @@ export default function ResultPage() {
                     <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
                   </svg>
                   <div className="text-left">
-                    <h3 className="font-semibold text-blue-900 mb-2">Pending Review</h3>
+                    <h3 className="font-semibold text-blue-900 mb-2">
+                      {isResultsPending ? 'Pending Admin Approval' : 'Pending Review'}
+                    </h3>
                     <p className="text-sm text-blue-800 mb-3">
-                      Your answers are being reviewed by the instructor. You will be notified when grading is complete.
+                      {isResultsPending
+                        ? 'Your test has been graded automatically. The instructor will review and release results soon.'
+                        : 'Your answers are being reviewed by the instructor. You will be notified when grading is complete.'
+                      }
                     </p>
                     <p className="text-sm text-blue-700">
                       <strong>What happens next:</strong>
                     </p>
                     <ul className="text-sm text-blue-700 list-disc list-inside space-y-1 mt-2">
-                      <li>Instructor will review each of your answers</li>
-                      <li>Points will be awarded based on the quality of your responses</li>
-                      <li>You'll receive your score and detailed feedback</li>
-                      <li>Check back in 1-2 days to see your results</li>
+                      {isResultsPending ? (
+                        <>
+                          <li>Instructor will review the test results</li>
+                          <li>Results will be released when ready</li>
+                          <li>You'll be able to see your score and feedback</li>
+                          <li>Check back soon to see your results</li>
+                        </>
+                      ) : (
+                        <>
+                          <li>Instructor will review each of your answers</li>
+                          <li>Points will be awarded based on the quality of your responses</li>
+                          <li>You'll receive your score and detailed feedback</li>
+                          <li>Check back in 1-2 days to see your results</li>
+                        </>
+                      )}
                     </ul>
                   </div>
                 </div>
@@ -169,9 +190,8 @@ export default function ResultPage() {
           <>
             {/* Result Header - Only show for graded tests */}
             <div className="text-center mb-8">
-              <div className={`inline-flex items-center justify-center w-20 h-20 rounded-full mb-4 ${
-                passed ? 'bg-green-100' : 'bg-red-100'
-              }`}>
+              <div className={`inline-flex items-center justify-center w-20 h-20 rounded-full mb-4 ${passed ? 'bg-green-100' : 'bg-red-100'
+                }`}>
                 {passed ? (
                   <svg className="w-10 h-10 text-green-600" fill="currentColor" viewBox="0 0 20 20">
                     <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />

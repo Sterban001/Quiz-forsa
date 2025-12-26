@@ -1,9 +1,9 @@
 import { Router } from 'express'
-import { supabase } from '../config/supabase'
+import { supabase, supabaseAdmin } from '../config/supabase'
 import { authenticate } from '../middleware/auth.middleware'
 import { authLimiter, otpLimiter } from '../middleware/rateLimit.middleware'
 import { validate } from '../middleware/validate.middleware'
-import { loginSchema, sendOtpSchema, verifyOtpSchema } from '../validators/auth.validator'
+import { loginSchema, sendOtpSchema, verifyOtpSchema, forgotPasswordSchema, resetPasswordSchema } from '../validators/auth.validator'
 
 const router = Router()
 
@@ -58,6 +58,42 @@ router.post('/login', authLimiter, validate(loginSchema), async (req, res) => {
   }
 })
 
+// Google OAuth login
+router.get('/google', async (req, res) => {
+  try {
+    // Determine redirect URL based on referer or query parameter
+    const referer = req.headers.referer || req.headers.origin
+    let redirectUrl = process.env.FRONTEND_URL || 'http://localhost:3000'
+
+    // If referer contains port 3005, redirect to student app, otherwise admin panel
+    if (referer && referer.includes(':3005')) {
+      redirectUrl = 'http://localhost:3005'
+    }
+
+    const { data, error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: `${redirectUrl}/auth/callback`
+      }
+    })
+
+    if (error) {
+      return res.status(400).json({
+        success: false,
+        error: { message: error.message }
+      })
+    }
+
+    // Redirect to Google OAuth
+    return res.redirect(data.url)
+  } catch (error: any) {
+    return res.status(500).json({
+      success: false,
+      error: { message: error.message }
+    })
+  }
+})
+
 // Send OTP
 router.post('/otp/send', otpLimiter, validate(sendOtpSchema), async (req, res) => {
   try {
@@ -94,7 +130,7 @@ router.post('/otp/verify', authLimiter, validate(verifyOtpSchema), async (req, r
   try {
     const { email, token } = req.body
 
-    const { data, error} = await supabase.auth.verifyOtp({
+    const { data, error } = await supabase.auth.verifyOtp({
       email,
       token,
       type: 'email'
@@ -190,6 +226,85 @@ router.get('/me', authenticate, async (req, res) => {
         user: authReq.user,
         profile
       }
+    })
+  } catch (error: any) {
+    return res.status(500).json({
+      success: false,
+      error: { message: error.message }
+    })
+  }
+})
+
+// Forgot password - send reset email
+router.post('/forgot-password', authLimiter, validate(forgotPasswordSchema), async (req, res) => {
+  try {
+    const { email } = req.body
+
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/reset-password`
+    })
+
+    if (error) {
+      return res.status(400).json({
+        success: false,
+        error: { message: error.message }
+      })
+    }
+
+    return res.json({
+      success: true,
+      data: { message: 'Password reset email sent successfully' }
+    })
+  } catch (error: any) {
+    return res.status(500).json({
+      success: false,
+      error: { message: error.message }
+    })
+  }
+})
+
+// Reset password with token
+router.post('/reset-password', authLimiter, validate(resetPasswordSchema), async (req, res) => {
+  try {
+    const { password } = req.body
+
+    // Get the access token from the Authorization header
+    const authHeader = req.headers.authorization
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({
+        success: false,
+        error: { message: 'No access token provided' }
+      })
+    }
+
+    const accessToken = authHeader.substring(7) // Remove 'Bearer ' prefix
+
+    // Create a Supabase client with the user's session
+    const { data: { user }, error: userError } = await supabase.auth.getUser(accessToken)
+
+    if (userError || !user) {
+      return res.status(401).json({
+        success: false,
+        error: { message: 'Invalid or expired reset token' }
+      })
+    }
+
+    // Update the user's password using the Admin API
+    const { error } = await supabaseAdmin.auth.admin.updateUserById(
+      user.id,
+      { password }
+    )
+
+    if (error) {
+      return res.status(400).json({
+        success: false,
+        error: { message: error.message }
+      })
+    }
+
+    return res.json({
+      success: true,
+      data: { message: 'Password reset successfully' }
     })
   } catch (error: any) {
     return res.status(500).json({

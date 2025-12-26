@@ -78,18 +78,18 @@ export default function HistoryPage() {
     passed: attempts.filter((a) => {
       if (a.status !== 'graded') return false
       const percentage = a.max_score > 0 ? (a.score / a.max_score) * 100 : 0
-      return percentage >= a.tests.pass_score
+      return percentage >= Number(a.tests.pass_score)
     }).length,
     avgScore: attempts.filter((a) => a.status === 'graded').length > 0
       ? Math.round(
-          attempts
-            .filter((a) => a.status === 'graded')
-            .reduce((sum, a) => {
-              const percentage = a.max_score > 0 ? (a.score / a.max_score) * 100 : 0
-              return sum + percentage
-            }, 0) /
-            attempts.filter((a) => a.status === 'graded').length
-        )
+        attempts
+          .filter((a) => a.status === 'graded')
+          .reduce((sum, a) => {
+            const percentage = a.max_score > 0 ? (a.score / a.max_score) * 100 : 0
+            return sum + percentage
+          }, 0) /
+        attempts.filter((a) => a.status === 'graded').length
+      )
       : 0,
   }
 
@@ -193,7 +193,19 @@ export default function HistoryPage() {
             <tbody className="bg-white divide-y divide-gray-100">
               {attempts.map((attempt) => {
                 const percentage = attempt.max_score > 0 ? Math.round((attempt.score / attempt.max_score) * 100) : 0
-                const passed = percentage >= attempt.tests.pass_score
+                const passScoreNum = Number(attempt.tests.pass_score)
+                const passed = percentage >= passScoreNum
+
+                // Debug logging
+                console.log('Test:', attempt.tests.title, {
+                  percentage,
+                  passScore: attempt.tests.pass_score,
+                  passScoreNum,
+                  passed,
+                  score: attempt.score,
+                  maxScore: attempt.max_score
+                })
+
                 const isPendingReview = attempt.status === 'submitted'
                 const isCompleted = attempt.status === 'graded'
 
@@ -257,13 +269,12 @@ export default function HistoryPage() {
                           Under Review
                         </span>
                       ) : (
-                        <span className={`px-3 py-1.5 inline-flex text-xs font-semibold rounded-lg ${
-                          attempt.status === 'graded'
-                            ? 'bg-green-100 text-green-800 border border-green-200'
-                            : attempt.status === 'submitted'
+                        <span className={`px-3 py-1.5 inline-flex text-xs font-semibold rounded-lg ${attempt.status === 'graded'
+                          ? 'bg-green-100 text-green-800 border border-green-200'
+                          : attempt.status === 'submitted'
                             ? 'bg-blue-100 text-blue-800 border border-blue-200'
                             : 'bg-gray-100 text-gray-800 border border-gray-200'
-                        }`}>
+                          }`}>
                           {attempt.status === 'graded' ? 'Graded' : attempt.status.charAt(0).toUpperCase() + attempt.status.slice(1)}
                         </span>
                       )}
@@ -272,11 +283,10 @@ export default function HistoryPage() {
                       {isPendingReview ? (
                         <span className="text-sm text-gray-500 font-medium italic">Awaiting results</span>
                       ) : isCompleted ? (
-                        <span className={`px-3 py-1.5 inline-flex items-center gap-1.5 text-xs font-bold rounded-lg ${
-                          passed
-                            ? 'bg-green-100 text-green-700 border-2 border-green-300'
-                            : 'bg-red-100 text-red-700 border-2 border-red-300'
-                        }`}>
+                        <span className={`px-3 py-1.5 inline-flex items-center gap-1.5 text-xs font-bold rounded-lg ${passed
+                          ? 'bg-green-100 text-green-700 border-2 border-green-300'
+                          : 'bg-red-100 text-red-700 border-2 border-red-300'
+                          }`}>
                           {passed ? (
                             <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
                               <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />

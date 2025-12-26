@@ -58,3 +58,14 @@ export const verifyOtpSchema = Joi.object({
   email: emailSchema,
   token: otpTokenSchema
 })
+
+// Forgot password validation schema
+export const forgotPasswordSchema = Joi.object({
+  email: emailSchema
+})
+
+// Reset password validation schema
+export const resetPasswordSchema = Joi.object({
+  password: passwordSchema
+})
+

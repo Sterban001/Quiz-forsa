@@ -129,6 +129,20 @@ class ApiClient {
     return this.request<{ user: any; profile: any }>('/auth/me')
   }
 
+  async forgotPassword(email: string) {
+    return this.request<{ message: string }>('/auth/forgot-password', {
+      method: 'POST',
+      body: JSON.stringify({ email }),
+    })
+  }
+
+  async resetPassword(password: string) {
+    return this.request<{ message: string }>('/auth/reset-password', {
+      method: 'POST',
+      body: JSON.stringify({ password }),
+    })
+  }
+
   // Test endpoints
   async getTests(filters?: { status?: string; visibility?: string; category?: string }) {
     const params = new URLSearchParams(filters as any)
@@ -250,6 +264,19 @@ class ApiClient {
 
   async getLeaderboard(testId: string) {
     return this.request<any[]>(`/analytics/leaderboard/${testId}`)
+  }
+
+  // Result release endpoints
+  async releaseTestResults(testId: string) {
+    return this.request<{ message: string; affected_attempts: number }>(`/tests/${testId}/release-results`, {
+      method: 'POST',
+    })
+  }
+
+  async releaseAttemptResult(attemptId: string) {
+    return this.request<{ message: string; attempt: any }>(`/tests/attempts/${attemptId}/release-result`, {
+      method: 'POST',
+    })
   }
 }
 

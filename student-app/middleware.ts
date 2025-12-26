@@ -1,8 +1,17 @@
 import { type NextRequest, NextResponse } from 'next/server'
 
 export async function middleware(request: NextRequest) {
+  const { pathname } = request.nextUrl
+
+  // Allow access to public pages without auth
+  const publicPaths = ['/login', '/forgot-password', '/reset-password', '/auth/callback']
+
+  if (publicPaths.includes(pathname)) {
+    return NextResponse.next()
+  }
+
   // Check if the user is trying to access a protected route
-  const isProtectedRoute = request.nextUrl.pathname.startsWith('/dashboard')
+  const isProtectedRoute = pathname.startsWith('/dashboard')
 
   if (isProtectedRoute) {
     // Check for auth token in cookies
