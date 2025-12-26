@@ -1,5 +1,5 @@
 import { Router } from 'express'
-import { supabase, supabaseAdmin } from '../config/supabase'
+import { supabaseAdmin } from '../config/supabase'
 import { authenticate, AuthRequest } from '../middleware/auth.middleware'
 import { attemptLimiter } from '../middleware/rateLimit.middleware'
 import { parsePaginationParams, getSupabaseRange, paginateResponse } from '../utils/pagination'
