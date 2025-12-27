@@ -61,13 +61,16 @@ router.post('/login', authLimiter, validate(loginSchema), async (req, res) => {
 // Google OAuth login
 router.get('/google', async (req, res) => {
   try {
-    // Determine redirect URL based on referer or query parameter
+    // Determine redirect URL based on referer
     const referer = req.headers.referer || req.headers.origin
-    let redirectUrl = process.env.FRONTEND_URL || 'http://localhost:3000'
+    const adminUrl = process.env.FRONTEND_URL || 'http://localhost:3000'
+    const studentUrl = process.env.STUDENT_APP_URL || 'http://localhost:3005'
 
-    // If referer contains port 3005, redirect to student app, otherwise admin panel
-    if (referer && referer.includes(':3005')) {
-      redirectUrl = 'http://localhost:3005'
+    let redirectUrl = adminUrl
+
+    // If referer matches student app (prod or dev), redirect there
+    if (referer && (referer.includes(studentUrl) || referer.includes('localhost:3005'))) {
+      redirectUrl = studentUrl
     }
 
     const { data, error } = await supabase.auth.signInWithOAuth({
