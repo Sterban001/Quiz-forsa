@@ -64,8 +64,8 @@ router.get('/google', async (req, res) => {
     // Determine redirect URL based on source parameter or referer
     const { source } = req.query
     const referer = req.headers.referer || req.headers.origin
-    const adminUrl = process.env.FRONTEND_URL || 'http://localhost:3000'
-    const studentUrl = process.env.STUDENT_APP_URL || 'http://localhost:3005'
+    const adminUrl = process.env.FRONTEND_URL || 'https://quiz-forsa-pkj7.vercel.app'
+    const studentUrl = process.env.STUDENT_APP_URL || 'https://quiz-forsa-9vq9.vercel.app'
 
     let redirectUrl = adminUrl
 
@@ -80,13 +80,13 @@ router.get('/google', async (req, res) => {
     }
 
     // DEBUG: Log variables to Vercel Function Console
-    console.log('--- OAUTH DEBUG ---')
-    console.log(`Source Param: ${source}`)
-    console.log(`Referer: ${referer}`)
-    console.log(`Env STUDENT_APP_URL: ${process.env.STUDENT_APP_URL}`)
-    console.log(`Env FRONTEND_URL: ${process.env.FRONTEND_URL}`)
-    console.log(`Final Redirect Url: ${redirectUrl}`)
-    console.log('-------------------')
+    // DEBUG: Log variables to Vercel Function Console (Using Error level to force visibility)
+    console.error('--- OAUTH DEBUG START ---')
+    console.error(`Source Param: ${source}`)
+    console.error(`Referer: ${referer}`)
+    console.error(`Env STUDENT_APP_URL: ${process.env.STUDENT_APP_URL}`)
+    console.error(`Resolved Student Url: ${studentUrl}`)
+    console.error('-----------------------')
 
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
