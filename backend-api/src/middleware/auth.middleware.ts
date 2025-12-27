@@ -16,15 +16,23 @@ export const authenticate = async (
 ) => {
   try {
     const authHeader = req.headers.authorization
+    let token: string | undefined
 
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    // Check Authorization header first
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      token = authHeader.substring(7)
+    }
+    // Fall back to cookie if no Authorization header
+    else if (req.cookies && req.cookies.auth_token) {
+      token = req.cookies.auth_token
+    }
+
+    if (!token) {
       return res.status(401).json({
         success: false,
         error: { message: 'No token provided' }
       })
     }
-
-    const token = authHeader.substring(7)
 
     // Verify token with Supabase
     const { data: { user }, error } = await supabase.auth.getUser(token)
