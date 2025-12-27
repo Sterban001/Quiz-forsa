@@ -37,6 +37,7 @@ router.post('/login', authLimiter, validate(loginSchema), async (req, res) => {
         httpOnly: true,  // Prevents JavaScript access (XSS protection)
         secure: true,  // Always HTTPS (Vercel uses HTTPS)
         sameSite: 'lax',  // Allow cookies in top-level navigation (works for login redirects)
+        domain: '.vercel.app',  // Share cookie across all Vercel subdomains
         maxAge: 7 * 24 * 60 * 60 * 1000,  // 7 days
         path: '/'
       })
