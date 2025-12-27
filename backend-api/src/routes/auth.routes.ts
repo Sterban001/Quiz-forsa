@@ -33,11 +33,12 @@ router.post('/login', authLimiter, validate(loginSchema), async (req, res) => {
 
     // Set secure HTTP-only cookie
     if (data.session?.access_token) {
+      const isProduction = process.env.NODE_ENV === 'production'
       res.cookie('auth_token', data.session.access_token, {
         httpOnly: true,  // Prevents JavaScript access (XSS protection)
-        secure: true,  // Always HTTPS (Vercel uses HTTPS)
-        sameSite: 'lax',  // Allow cookies in top-level navigation (works for login redirects)
-        domain: '.vercel.app',  // Share cookie across all Vercel subdomains
+        secure: isProduction,  // HTTPS only in production
+        sameSite: isProduction ? 'none' : 'lax',  // 'none' for cross-site in production
+        domain: isProduction ? '.vercel.app' : undefined,  // Share across Vercel subdomains in production
         maxAge: 7 * 24 * 60 * 60 * 1000,  // 7 days
         path: '/'
       })
