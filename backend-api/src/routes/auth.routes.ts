@@ -61,7 +61,7 @@ router.post('/login', authLimiter, validate(loginSchema), async (req, res) => {
 })
 
 // Logout endpoint - clears the auth cookie
-router.post('/logout', (req, res) => {
+router.post('/logout', (_req, res) => {
   // Clear the auth_token cookie
   res.clearCookie('auth_token', {
     httpOnly: true,
