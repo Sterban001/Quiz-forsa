@@ -84,8 +84,17 @@ app.use(cors({
   optionsSuccessStatus: 204,
   maxAge: 86400  // Cache preflight requests for 24 hours
 }))
-app.use(morgan('dev'))
+app.use(morgan('combined'))
 app.use(cookieParser())  // Parse cookies from requests
+
+// Prevent caching of all API responses (especially important for auth endpoints)
+app.use((_req, res, next) => {
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private')
+  res.setHeader('Pragma', 'no-cache')
+  res.setHeader('Expires', '0')
+  next()
+})
+
 app.use(express.json())
 app.use(express.urlencoded({ extended: true }))
 
