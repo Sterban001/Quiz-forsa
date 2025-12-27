@@ -14,11 +14,12 @@ export default function DashboardLayout({
   const handleLogout = async () => {
     try {
       await apiClient.logout()
-      router.push('/login')
+      // Use hard redirect to ensure logout works in production
+      window.location.href = '/login'
     } catch (error) {
       console.error('Logout failed:', error)
       // Even if logout fails, redirect to login
-      router.push('/login')
+      window.location.href = '/login'
     }
   }
 
