@@ -9,6 +9,11 @@ const router = Router()
 
 // Login with email and password
 router.post('/login', authLimiter, validate(loginSchema), async (req, res) => {
+  // Prevent caching of login responses
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private')
+  res.setHeader('Pragma', 'no-cache')
+  res.setHeader('Expires', '0')
+
   try {
     const { email, password } = req.body
 
