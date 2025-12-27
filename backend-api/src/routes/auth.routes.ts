@@ -64,8 +64,16 @@ router.get('/google', async (req, res) => {
     // Determine redirect URL based on source parameter or referer
     const { source } = req.query
     const referer = req.headers.referer || req.headers.origin
-    const adminUrl = process.env.FRONTEND_URL || 'https://quiz-forsa-pkj7.vercel.app'
-    const studentUrl = process.env.STUDENT_APP_URL || 'https://quiz-forsa-9vq9.vercel.app'
+    // Fallback to production URLs if env vars are missing, stale, or point to localhost (common mistake)
+    const isLocalhost = (url?: string) => url?.includes('localhost')
+
+    const adminUrl = (!isLocalhost(process.env.FRONTEND_URL) && process.env.FRONTEND_URL)
+      ? process.env.FRONTEND_URL
+      : 'https://quiz-forsa-pkj7.vercel.app'
+
+    const studentUrl = (!isLocalhost(process.env.STUDENT_APP_URL) && process.env.STUDENT_APP_URL)
+      ? process.env.STUDENT_APP_URL
+      : 'https://quiz-forsa-9vq9.vercel.app'
 
     let redirectUrl = adminUrl
 
