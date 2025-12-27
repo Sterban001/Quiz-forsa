@@ -42,8 +42,8 @@ function LoginContent() {
         throw new Error('Access denied. Admin role required.')
       }
 
-      router.push('/dashboard')
-      router.refresh()
+      // Use window.location for hard redirect (more reliable after auth)
+      window.location.href = '/dashboard'
     } catch (err: any) {
       setError(err.message || 'Failed to login')
     } finally {
