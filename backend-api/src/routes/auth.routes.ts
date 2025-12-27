@@ -79,6 +79,15 @@ router.get('/google', async (req, res) => {
       redirectUrl = studentUrl
     }
 
+    // DEBUG: Log variables to Vercel Function Console
+    console.log('--- OAUTH DEBUG ---')
+    console.log(`Source Param: ${source}`)
+    console.log(`Referer: ${referer}`)
+    console.log(`Env STUDENT_APP_URL: ${process.env.STUDENT_APP_URL}`)
+    console.log(`Env FRONTEND_URL: ${process.env.FRONTEND_URL}`)
+    console.log(`Final Redirect Url: ${redirectUrl}`)
+    console.log('-------------------')
+
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
