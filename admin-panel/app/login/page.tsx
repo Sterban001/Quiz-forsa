@@ -34,22 +34,12 @@ function LoginContent() {
     setError(null)
 
     try {
-      console.log('Starting login...')
-      const data = await apiClient.login(email, password)
-      console.log('Login response:', data)
+      await apiClient.login(email, password)
 
-      // Check if user is admin
-      if (data.profile?.role !== 'admin') {
-        console.log('User is not admin, role:', data.profile?.role)
-        await apiClient.logout()
-        throw new Error('Access denied. Admin role required.')
-      }
-
-      console.log('User is admin, redirecting to dashboard...')
-      // Use window.location for hard redirect (more reliable after auth)
-      window.location.href = '/dashboard'
+      // Successfully logged in - middleware will check admin role
+      router.push('/dashboard')
+      router.refresh()
     } catch (err: any) {
-      console.error('Login error:', err)
       setError(err.message || 'Failed to login')
     } finally {
       setLoading(false)
