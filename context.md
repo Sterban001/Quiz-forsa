@@ -1,6 +1,6 @@
  # Quiz-Quiz Platform Context
 
-> **Last Updated:** 2025-12-20
+> **Last Updated:** 2025-12-26
 
 ## Project Overview
 A comprehensive quiz management platform with separate admin and student interfaces, built with modern web technologies. Enables educators to create, manage, and grade quizzes while students can take tests and track their progress.
@@ -206,6 +206,77 @@ cd student-app && npm run dev   # Port 3005
 ---
 
 ## Recent Changes
+
+### 2025-12-26 - Full Production Vercel Deployment & Debugging
+**Summary:** Successfully deployed Backend API, Student App, and Admin Panel to Vercel production environment with full cross-origin communication and serverless optimization.
+
+**Previous State (Morning 2025-12-26):**
+- **Backend**: Local Express server (~4000) only. Not configured for serverless.
+- **Frontend**: Apps pointing to localhost APIs.
+- **Deployment**: Zero production presence. Vercel builds failed due to missing configs.
+- **Infrastructure**: Redis TCP connection hardcoded to localhost (incompatible with serverless).
+
+### Deployment & Start Scripts
+- **Backend**: Hosted on Vercel at `https://quiz-forsa.vercel.app`.
+  - **Important**: Uses `api/index.ts` wrapper.
+  - **Cold Start**: Redis connection has 2s timeout.
+  - **OAuth**: Google Login redirects based on `?source=student/admin`. **Ignores localhost env vars in production.**
+- **Admin Panel**: Hosted on Vercel at `https://quiz-forsa-pkj7.vercel.app`.
+- **Student App**: Hosted on Vercel at `https://quiz-forsa-9vq9.vercel.app`.
+
+### Recent Changes
+- **2025-12-27**: Fixed Admin Panel Email Login (Cookie SameSite Issue)
+  - **Context**: Email/password login worked for Student App but not Admin Panel.
+  - **Root Cause**: Cookie `sameSite: 'strict'` prevented cross-origin cookie transmission.
+  - **Fix**: Changed `sameSite` to `'none'` in `auth.routes.ts` to allow cookies between subdomains.
+  - **Files**: `backend-api/src/routes/auth.routes.ts`.
+
+- **2025-12-27**: Fixed Google OAuth Redirects & Supabase Config
+  - **Context**: Users were being redirected to localhost after Google Login.
+  - **Fixes**:
+    1.  Updated Backend `auth.routes.ts` to ignore `localhost` in environment variables.
+    2.  Added explicit `?source` query parameter to Student/Admin login flows.
+    3.  Corrected Supabase "Site URL" to Production Admin URL.
+    4.  Whitelisted Vercel production URLs in Supabase Redirects.
+  - **Files**: `backend-api/src/routes/auth.routes.ts`, `student-app/app/login/page.tsx`, `admin-panel/app/login/page.tsx`.
+
+- **2025-12-27**: Vercel Backend Deployment Fixes
+  - **Context**: Initial deployment failed due to "Invalid Export" and DB timeouts.
+**Current State (Evening 2025-12-26):**
+- **Backend**: Deployed to Vercel Serverless (`api/index.ts` handler).
+    - **Live URL**: `https://quiz-forsa.vercel.app`
+    - **Optimization**: Zero-config rewrites, cold-start protection (conditional Redis).
+- **Frontend**:
+    - **Student App**: `https://quiz-forsa-9vq9.vercel.app`
+    - **Admin Panel**: `https://quiz-forsa-pkj7.vercel.app`
+- **Security**: CORS Allow-List enforced for production domains.
+- **Stability**: Robust Redis connection logic (timeouts + skip localhost in prod) prevents 504 server hangs.
+
+**Changes & Fixes Implemented:**
+1.  **Serverless Conversion**:
+    -   Created `api/index.ts` to wrap Express app in a Vercel handler function.
+    -   Refactored `src/index.ts` to use Named Exports (`export { app }`) to fix TypeScript interop crashes.
+    -   Disabled `tsc` build in `package.json` to let Vercel handle serverless compilation.
+    -   Created `vercel.json` with rewrite rules for standard Express routing.
+2.  **Crash Debugging**:
+    -   Fixed `FUNCTION_INVOCATION_FAILED` by adding `api/` to `tsconfig.json` include path.
+    -   Fixed `Invalid export found` by switching from default to named exports.
+    -   Fixed `504 Gateway Timeout` by adding 2s timeout to Redis connection and skipping localhost connection in production env.
+3.  **Environment Configuration**:
+    -   Updated `CORS_ORIGIN` to include live Vercel frontend URLs.
+    -   Added `FRONTEND_URL` to backend to fix Google OAuth redirecting to localhost.
+    -   Verified `SUPABASE_URL` interaction (using standard client).
+
+**Files Affected:**
+-   `backend-api/vercel.json` (New)
+-   `backend-api/api/index.ts` (New)
+-   `backend-api/src/index.ts` (Refactored)
+-   `backend-api/src/config/redis.ts` (Hardened)
+-   `backend-api/tsconfig.json` (Updated)
+-   `backend-api/package.json` (Build script updated)
+-   `backend-api/src/routes/auth.routes.ts` (Observed)
+
+### 2025-12-26 - Vercel Configuration
 
 ### 2025-12-20 - Result Display and RLS Policy Fixes
 **Summary:** Fixed critical bugs preventing test results from displaying correctly and attempts from loading

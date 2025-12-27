@@ -35,8 +35,8 @@ router.post('/login', authLimiter, validate(loginSchema), async (req, res) => {
     if (data.session?.access_token) {
       res.cookie('auth_token', data.session.access_token, {
         httpOnly: true,  // Prevents JavaScript access (XSS protection)
-        secure: process.env.NODE_ENV === 'production',  // HTTPS only in production
-        sameSite: 'strict',  // CSRF protection
+        secure: true,  // Always HTTPS (Vercel uses HTTPS)
+        sameSite: 'none',  // Allow cross-site cookies (required for different subdomains)
         maxAge: 7 * 24 * 60 * 60 * 1000,  // 7 days
         path: '/'
       })
