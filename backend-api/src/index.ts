@@ -58,8 +58,11 @@ app.use(helmet({
 
 // CORS configuration - whitelist specific origins
 const allowedOrigins = process.env.CORS_ORIGIN?.split(',').map(origin => origin.trim()) || [
-  'http://localhost:3000',  // Admin panel (development)
-  'http://localhost:3001'   // Student app (development)
+  'http://localhost:3000',
+  'http://localhost:3005',
+  'https://quiz-forsa.vercel.app',
+  'https://quiz-forsa-9vq9.vercel.app',
+  'https://quiz-forsa-pkj7.vercel.app'
 ]
 
 app.use(cors({
