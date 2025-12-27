@@ -61,15 +61,21 @@ router.post('/login', authLimiter, validate(loginSchema), async (req, res) => {
 // Google OAuth login
 router.get('/google', async (req, res) => {
   try {
-    // Determine redirect URL based on referer
+    // Determine redirect URL based on source parameter or referer
+    const { source } = req.query
     const referer = req.headers.referer || req.headers.origin
     const adminUrl = process.env.FRONTEND_URL || 'http://localhost:3000'
     const studentUrl = process.env.STUDENT_APP_URL || 'http://localhost:3005'
 
     let redirectUrl = adminUrl
 
-    // If referer matches student app (prod or dev), redirect there
-    if (referer && (referer.includes(studentUrl) || referer.includes('localhost:3005'))) {
+    // Prioritize explicit source parameter
+    if (source === 'student') {
+      redirectUrl = studentUrl
+    } else if (source === 'admin') {
+      redirectUrl = adminUrl
+    } else if (referer && (referer.includes(studentUrl) || referer.includes('localhost:3005'))) {
+      // Fallback to referer check
       redirectUrl = studentUrl
     }
 

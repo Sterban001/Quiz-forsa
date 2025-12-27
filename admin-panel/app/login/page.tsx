@@ -60,7 +60,7 @@ function LoginContent() {
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api'
       // Remove trailing /api if present to avoid duplication
       const baseUrl = apiUrl.replace(/\/api$/, '')
-      window.location.href = `${baseUrl}/api/auth/google`
+      window.location.href = `${baseUrl}/api/auth/google?source=admin`
     } catch (err: any) {
       setError(err.message || 'Failed to initiate Google login')
       setLoading(false)
