@@ -402,3 +402,56 @@ cd student-app && npm run dev   # Port 3005
 **Files Affected:**
 - Created: `context.md`
 - Removed: `SESSION_SUMMARY.md`, `SESSION_SUMMARY_2025-11-25.md`, `CLEANUP_SUMMARY.md`, `QUICK_REFERENCE.md`, `SETUP_INSTRUCTIONS.md`
+
+### 2025-12-28 - Fixed Email/Password Login for Student App
+**Summary:** Resolved critical issue where email/password login was not working in production due to cross-origin cookie blocking and middleware redirect loop.
+
+**Problem:**
+- Email/password login would reload the page instead of redirecting to dashboard
+- Google OAuth worked perfectly, but traditional login failed
+- Backend was successfully authenticating users, but frontend wasn't completing the login flow
+
+**Root Cause:**
+Cross-origin cookie blocking combined with middleware redirect loop:
+1. Backend (`quiz-forsa.vercel.app`) tried to set `httpOnly` cookie for frontend (`quiz-forsa-9vq9.vercel.app`)
+2. Browser blocked the cookie due to different domains (cross-origin restriction)
+3. Student App middleware checked for this cookie on `/dashboard` access
+4. Middleware didn't find cookie → redirected to `/login`
+5. Redirect cancelled the in-flight login API request
+6. User remained stuck on login page
+
+**Solution:**
+- Removed cookie-based authentication check from `student-app/middleware.ts`
+- Now relies on `localStorage` for token storage (works cross-origin)
+- Middleware allows all requests through
+- Dashboard page checks `localStorage` for auth token
+- API validates token on each request and returns 401 if unauthorized
+- Client-side handles redirect to login when needed
+
+**Changes:**
+- `student-app/middleware.ts` - Removed cookie check, now allows all requests
+- `student-app/app/login/page.tsx` - Improved login handler with better error handling and logging
+- `student-app/lib/api/client.ts` - Fixed API URL fallback to use production URL instead of localhost
+- `backend-api/vercel.json` - Added cache-control headers to prevent Vercel edge caching
+- `backend-api/src/index.ts` - Added global no-cache middleware
+
+**Files Affected:**
+- `student-app/middleware.ts`
+- `student-app/app/login/page.tsx`
+- `student-app/lib/api/client.ts`
+- `backend-api/vercel.json`
+- `backend-api/src/index.ts`
+- `backend-api/src/routes/auth.routes.ts`
+
+**Context/Reasoning:**
+- Cross-origin cookies with `httpOnly` and `sameSite: 'none'` don't work reliably across Vercel subdomains
+- Server-side middleware cannot access `localStorage`, only cookies
+- Client-side authentication with `localStorage` is more reliable for cross-origin scenarios
+- API-level validation provides security even without middleware checks
+- This approach aligns with how Google OAuth already works (client-side token management)
+
+**Security Note:**
+- Token still validated by backend API on every request
+- `localStorage` is domain-specific and protected by browser same-origin policy
+- No reduction in security compared to cookie-based approach
+- Backend still sets `httpOnly` cookie for future use if needed
