@@ -35,9 +35,8 @@ function LoginContent() {
     try {
       await apiClient.login(email, password)
 
-      // Successfully logged in
-      router.push('/dashboard')
-      router.refresh()
+      // Successfully logged in - use hard redirect for reliability
+      window.location.href = '/dashboard'
     } catch (err: any) {
       setError(err.message || 'Failed to login')
     } finally {
