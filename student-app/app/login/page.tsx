@@ -14,6 +14,12 @@ function LoginContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
 
+  // Debug: Log when component mounts
+  useEffect(() => {
+    console.log('LoginContent mounted')
+    console.log('API Client base URL:', (apiClient as any).baseUrl)
+  }, [])
+
   // Check for error parameters in URL (from OAuth callback)
   useEffect(() => {
     const errorParam = searchParams.get('error')
@@ -28,13 +34,19 @@ function LoginContent() {
   }, [searchParams])
 
   const handlePasswordLogin = async () => {
+    console.log('=== handlePasswordLogin called ===')
+    console.log('Email:', email)
+    console.log('Password length:', password.length)
+
     // Validate inputs
     if (!email || !password) {
+      console.log('Validation failed: empty fields')
       setError('Please enter both email and password')
       return
     }
 
     if (password.length < 6) {
+      console.log('Validation failed: password too short')
       setError('Password must be at least 6 characters')
       return
     }
@@ -43,11 +55,13 @@ function LoginContent() {
     setError(null)
 
     try {
+      console.log('Calling apiClient.login...')
       console.log('Attempting login with:', email)
       const result = await apiClient.login(email, password)
       console.log('Login successful:', result)
 
       // Successfully logged in - use hard redirect for reliability
+      console.log('Redirecting to /dashboard')
       window.location.href = '/dashboard'
     } catch (err: any) {
       console.error('Login error:', err)
@@ -62,7 +76,7 @@ function LoginContent() {
 
     try {
       // Redirect to backend Google OAuth endpoint
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api'
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'https://quiz-forsa.vercel.app/api'
       // Remove trailing /api if present to avoid duplication
       const baseUrl = apiUrl.replace(/\/api$/, '')
       window.location.href = `${baseUrl}/api/auth/google?source=student`
