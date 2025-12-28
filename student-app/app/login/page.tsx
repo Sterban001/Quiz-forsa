@@ -63,7 +63,10 @@ function LoginContent() {
       const result = await apiClient.login(email, password)
       console.log('Login successful:', result)
 
-      // Successfully logged in - use hard redirect for reliability
+      // Successfully logged in - wait a moment for cookie to be set, then redirect
+      console.log('Waiting for cookie to be set...')
+      await new Promise(resolve => setTimeout(resolve, 500))
+
       console.log('Redirecting to /dashboard')
       window.location.href = '/dashboard'
     } catch (err: any) {
