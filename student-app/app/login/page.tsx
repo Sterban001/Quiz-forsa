@@ -146,7 +146,10 @@ function LoginContent() {
 
           <button
             type="button"
-            onClick={handlePasswordLogin}
+            onClick={() => {
+              console.log('BUTTON CLICKED!')
+              handlePasswordLogin()
+            }}
             disabled={loading}
             className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 px-4 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
