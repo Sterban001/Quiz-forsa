@@ -27,19 +27,31 @@ function LoginContent() {
     }
   }, [searchParams])
 
-  const handlePasswordLogin = async (e: React.FormEvent) => {
-    e.preventDefault()
+  const handlePasswordLogin = async () => {
+    // Validate inputs
+    if (!email || !password) {
+      setError('Please enter both email and password')
+      return
+    }
+
+    if (password.length < 6) {
+      setError('Password must be at least 6 characters')
+      return
+    }
+
     setLoading(true)
     setError(null)
 
     try {
-      await apiClient.login(email, password)
+      console.log('Attempting login with:', email)
+      const result = await apiClient.login(email, password)
+      console.log('Login successful:', result)
 
       // Successfully logged in - use hard redirect for reliability
       window.location.href = '/dashboard'
     } catch (err: any) {
+      console.error('Login error:', err)
       setError(err.message || 'Failed to login')
-    } finally {
       setLoading(false)
     }
   }
@@ -74,7 +86,7 @@ function LoginContent() {
           </div>
         )}
 
-        <form onSubmit={handlePasswordLogin} className="space-y-6">
+        <div className="space-y-6">
           <div>
             <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
               Email Address
@@ -84,7 +96,7 @@ function LoginContent() {
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              required
+              onKeyPress={(e) => e.key === 'Enter' && handlePasswordLogin()}
               className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               placeholder="your@email.com"
             />
@@ -99,7 +111,7 @@ function LoginContent() {
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              required
+              onKeyPress={(e) => e.key === 'Enter' && handlePasswordLogin()}
               className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               placeholder="Enter password (min 6 characters)"
             />
@@ -110,14 +122,14 @@ function LoginContent() {
               type="button"
               onClick={() => router.push('/forgot-password')}
               className="text-sm text-blue-600 hover:text-blue-700 hover:underline bg-transparent border-0 p-0 cursor-pointer"
-              style={{ pointerEvents: 'auto' }}
             >
               Forgot password?
             </button>
           </div>
 
           <button
-            type="submit"
+            type="button"
+            onClick={handlePasswordLogin}
             disabled={loading}
             className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 px-4 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
@@ -159,7 +171,7 @@ function LoginContent() {
             </svg>
             Sign in with Google
           </button>
-        </form>
+        </div>
 
         <div className="mt-6 text-center text-sm text-gray-600">
           <p>New student? Just enter your email to get started!</p>
