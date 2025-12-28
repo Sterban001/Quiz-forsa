@@ -10,21 +10,9 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next()
   }
 
-  // Check if the user is trying to access a protected route
-  const isProtectedRoute = pathname.startsWith('/dashboard')
-
-  if (isProtectedRoute) {
-    // Check for auth token in cookies
-    const token = request.cookies.get('auth_token')?.value
-
-    if (!token) {
-      // Redirect to login if no token
-      return NextResponse.redirect(new URL('/login', request.url))
-    }
-
-    // Verify token with API (optional - you can also just check existence)
-    // For now, we trust the cookie since API will validate on requests
-  }
+  // For protected routes, let the client-side handle auth checks
+  // The API will validate the token from localStorage on each request
+  // If unauthorized, the API will return 401 and client will redirect to login
 
   return NextResponse.next()
 }
