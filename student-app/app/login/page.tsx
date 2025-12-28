@@ -5,6 +5,9 @@ import { apiClient } from '@/lib/api/client'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 
+// Force dynamic rendering to prevent bailout
+export const dynamic = 'force-dynamic'
+
 // Extract the component using useSearchParams
 function LoginContent() {
   const [email, setEmail] = useState('')
