@@ -110,7 +110,7 @@ function LoginContent() {
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              onKeyPress={(e) => e.key === 'Enter' && handlePasswordLogin()}
+              onKeyPress={(e) => { if (e.key === 'Enter') { e.preventDefault(); handlePasswordLogin(); } }}
               className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               placeholder="your@email.com"
             />
@@ -125,7 +125,7 @@ function LoginContent() {
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              onKeyPress={(e) => e.key === 'Enter' && handlePasswordLogin()}
+              onKeyPress={(e) => { if (e.key === 'Enter') { e.preventDefault(); handlePasswordLogin(); } }}
               className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               placeholder="Enter password (min 6 characters)"
             />
