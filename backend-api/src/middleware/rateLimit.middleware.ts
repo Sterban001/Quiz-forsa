@@ -20,10 +20,10 @@ export const apiLimiter = rateLimit({
   // Use Redis store if available, otherwise use memory store
   store: isRedisAvailable()
     ? new RedisStore({
-        // @ts-expect-error - Known issue with rate-limit-redis types
-        client: redisClient,
-        prefix: 'rl:api:',
-      })
+      // @ts-expect-error - Known issue with rate-limit-redis types
+      client: redisClient,
+      prefix: 'rl:api:',
+    })
     : undefined,
 })
 
@@ -45,10 +45,10 @@ export const authLimiter = rateLimit({
   skipSuccessfulRequests: true, // Don't count successful requests
   store: isRedisAvailable()
     ? new RedisStore({
-        // @ts-expect-error - Known issue with rate-limit-redis types
-        client: redisClient,
-        prefix: 'rl:auth:',
-      })
+      // @ts-expect-error - Known issue with rate-limit-redis types
+      client: redisClient,
+      prefix: 'rl:auth:',
+    })
     : undefined,
 })
 
@@ -69,10 +69,10 @@ export const otpLimiter = rateLimit({
   legacyHeaders: false,
   store: isRedisAvailable()
     ? new RedisStore({
-        // @ts-expect-error - Known issue with rate-limit-redis types
-        client: redisClient,
-        prefix: 'rl:otp:',
-      })
+      // @ts-expect-error - Known issue with rate-limit-redis types
+      client: redisClient,
+      prefix: 'rl:otp:',
+    })
     : undefined,
 })
 
@@ -93,21 +93,21 @@ export const createLimiter = rateLimit({
   legacyHeaders: false,
   store: isRedisAvailable()
     ? new RedisStore({
-        // @ts-expect-error - Known issue with rate-limit-redis types
-        client: redisClient,
-        prefix: 'rl:create:',
-      })
+      // @ts-expect-error - Known issue with rate-limit-redis types
+      client: redisClient,
+      prefix: 'rl:create:',
+    })
     : undefined,
 })
 
 /**
  * Test attempt rate limiter
  * Prevents abuse of test taking
- * 10 attempts per hour per IP
+ * 50 attempts per hour per authenticated user
  */
 export const attemptLimiter = rateLimit({
   windowMs: 60 * 60 * 1000, // 1 hour
-  max: 10, // Limit each IP to 10 test attempts per hour
+  max: 50, // Limit each user to 50 test attempts per hour
   message: {
     success: false,
     error: {
@@ -116,11 +116,16 @@ export const attemptLimiter = rateLimit({
   },
   standardHeaders: true,
   legacyHeaders: false,
+  // Use authenticated user ID instead of IP address
+  keyGenerator: (req) => {
+    // @ts-expect-error - user is added by auth middleware
+    return req.user?.id || req.ip || 'anonymous'
+  },
   store: isRedisAvailable()
     ? new RedisStore({
-        // @ts-expect-error - Known issue with rate-limit-redis types
-        client: redisClient,
-        prefix: 'rl:attempt:',
-      })
+      // @ts-expect-error - Known issue with rate-limit-redis types
+      client: redisClient,
+      prefix: 'rl:attempt:',
+    })
     : undefined,
 })

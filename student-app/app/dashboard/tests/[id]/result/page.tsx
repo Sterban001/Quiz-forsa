@@ -9,7 +9,6 @@ export default function ResultPage() {
   const params = useParams()
   const searchParams = useSearchParams()
   const router = useRouter()
-  const testId = params.id as string
   const attemptId = searchParams.get('attempt')
 
   const [attempt, setAttempt] = useState<any>(null)
@@ -18,7 +17,7 @@ export default function ResultPage() {
 
   useEffect(() => {
     if (!attemptId) {
-      router.push(`/dashboard/tests/${testId}`)
+      router.push('/dashboard')
       return
     }
     loadResults()
@@ -26,16 +25,22 @@ export default function ResultPage() {
 
   const loadResults = async () => {
     try {
-      // Load attempt
+      // Load attempt first to get test_id
       const attemptData = await apiClient.getAttempt(attemptId!)
+      console.log('Loaded attempt:', attemptData)
       setAttempt(attemptData)
+
+      // Get testId from attempt data (more reliable than URL params)
+      const testId = attemptData.test_id
 
       // Load test
       const testData = await apiClient.getTest(testId)
+      console.log('Loaded test:', testData)
       setTest(testData)
     } catch (error: any) {
       console.error('Error loading results:', error)
-      alert('Failed to load results')
+      console.error('Error details:', error.response?.data || error.message)
+      alert(`Failed to load results: ${error.message || 'Unknown error'}`)
     } finally {
       setLoading(false)
     }
@@ -294,7 +299,7 @@ export default function ResultPage() {
             Back to Tests
           </Link>
           <Link
-            href={`/dashboard/tests/${testId}`}
+            href={`/dashboard/tests/${attempt?.test_id}`}
             className="flex-1 text-center px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors"
           >
             View Test Details

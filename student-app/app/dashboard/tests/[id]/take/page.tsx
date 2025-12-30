@@ -32,6 +32,8 @@ export default function TakeTestPage() {
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [timeExpired, setTimeExpired] = useState(false)
+  const [lastSaved, setLastSaved] = useState<Date | null>(null)
+  const [savingToDb, setSavingToDb] = useState(false)
 
   useEffect(() => {
     if (!attemptId) {
@@ -59,6 +61,20 @@ export default function TakeTestPage() {
     return () => clearInterval(timer)
   }, [timeRemaining])
 
+  // Auto-save to localStorage every 10 seconds
+  useEffect(() => {
+    if (!attemptId || Object.keys(answers).length === 0) return
+
+    const storageKey = `attempt_${attemptId}_answers`
+    const interval = setInterval(() => {
+      localStorage.setItem(storageKey, JSON.stringify(answers))
+      setLastSaved(new Date())
+      console.log('Auto-saved to localStorage')
+    }, 10000) // 10 seconds
+
+    return () => clearInterval(interval)
+  }, [answers, attemptId])
+
   const loadTest = async () => {
     try {
       // Load test
@@ -80,6 +96,44 @@ export default function TakeTestPage() {
       }
 
       setQuestions(processedQuestions)
+
+      // Restore answers from localStorage (crash recovery)
+      const storageKey = `attempt_${attemptId}_answers`
+      const savedAnswers = localStorage.getItem(storageKey)
+      if (savedAnswers) {
+        try {
+          const parsed = JSON.parse(savedAnswers)
+          setAnswers(parsed)
+          console.log('Restored answers from localStorage')
+        } catch (e) {
+          console.error('Failed to parse saved answers:', e)
+        }
+      }
+
+      // Restore or initialize timer from localStorage
+      const timerKey = `attempt_${attemptId}_start_time`
+      const savedStartTime = localStorage.getItem(timerKey)
+
+      if (savedStartTime) {
+        // Calculate elapsed time
+        const startTime = parseInt(savedStartTime)
+        const elapsedSeconds = Math.floor((Date.now() - startTime) / 1000)
+        const remainingSeconds = Math.max(0, (testData.time_limit_minutes * 60) - elapsedSeconds)
+
+        setTimeRemaining(remainingSeconds)
+        console.log(`Restored timer: ${remainingSeconds}s remaining (${elapsedSeconds}s elapsed)`)
+
+        // Check if time already expired
+        if (remainingSeconds <= 0) {
+          setTimeExpired(true)
+          handleSubmitTest(true)
+        }
+      } else {
+        // First time starting this attempt - save start time
+        localStorage.setItem(timerKey, Date.now().toString())
+        setTimeRemaining(testData.time_limit_minutes * 60)
+        console.log('Started new timer')
+      }
     } catch (error: any) {
       console.error('Error loading test:', error)
       alert('Failed to load test')
@@ -89,10 +143,46 @@ export default function TakeTestPage() {
   }
 
   const handleAnswerChange = (questionId: string, value: any) => {
-    setAnswers({
+    const newAnswers = {
       ...answers,
       [questionId]: value,
-    })
+    }
+    setAnswers(newAnswers)
+
+    // Immediately save to localStorage for instant crash recovery
+    if (attemptId) {
+      const storageKey = `attempt_${attemptId}_answers`
+      localStorage.setItem(storageKey, JSON.stringify(newAnswers))
+      setLastSaved(new Date())
+    }
+  }
+
+  // Save current answer to database (called on navigation)
+  const saveCurrentAnswerToDb = async (questionId: string, answer: any) => {
+    if (!answer || !attemptId) return
+
+    setSavingToDb(true)
+    try {
+      const question = questions.find((q) => q.id === questionId)
+      let responseJson: any = {}
+
+      if (question?.type === 'mcq_single' || question?.type === 'true_false') {
+        responseJson = { selected: answer }
+      } else if (question?.type === 'mcq_multi') {
+        responseJson = { selected: answer }
+      } else if (question?.type === 'short_text' || question?.type === 'long_text') {
+        responseJson = { text: answer }
+      } else if (question?.type === 'number') {
+        responseJson = { value: parseFloat(answer) || 0 }
+      }
+
+      await apiClient.saveAnswer(attemptId, questionId, responseJson)
+      setLastSaved(new Date())
+    } catch (error) {
+      console.error('Failed to save answer to database:', error)
+    } finally {
+      setSavingToDb(false)
+    }
   }
 
   const handleSubmitTest = async (autoSubmit = false) => {
@@ -124,6 +214,13 @@ export default function TakeTestPage() {
 
       // Submit the attempt
       await apiClient.submitAttempt(attemptId!)
+
+      // Clear localStorage on successful submission
+      const storageKey = `attempt_${attemptId}_answers`
+      const timerKey = `attempt_${attemptId}_start_time`
+      localStorage.removeItem(storageKey)
+      localStorage.removeItem(timerKey)
+      console.log('Cleared localStorage after successful submission')
 
       router.push(`/dashboard/tests/${testId}/result?attempt=${attemptId}`)
     } catch (error: any) {
@@ -175,14 +272,26 @@ export default function TakeTestPage() {
             </p>
           </div>
           <div className="text-right">
-            <div className={`text-3xl font-bold ${
-              timeRemaining < 300 ? 'text-red-600' : 'text-gray-900'
-            }`}>
+            <div className={`text-3xl font-bold ${timeRemaining < 300 ? 'text-red-600' : 'text-gray-900'
+              }`}>
               {formatTime(timeRemaining)}
             </div>
             <div className="text-sm text-gray-600">Time Remaining</div>
           </div>
         </div>
+
+        {/* Last saved indicator */}
+        {lastSaved && (
+          <div className="flex items-center gap-2 text-sm text-gray-600 mt-2">
+            <svg className="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+            </svg>
+            <span>
+              Last saved: {lastSaved.toLocaleTimeString()}
+              {savingToDb && <span className="ml-2 text-blue-600">Saving...</span>}
+            </span>
+          </div>
+        )}
 
         {/* Progress bar */}
         <div className="w-full bg-gray-200 rounded-full h-2">
@@ -212,9 +321,8 @@ export default function TakeTestPage() {
               {currentQuestion.question_options.map((option) => (
                 <label
                   key={option.id}
-                  className={`flex items-center p-4 border-2 border-gray-200 rounded-lg transition-colors ${
-                    timeExpired ? 'cursor-not-allowed opacity-50' : 'cursor-pointer hover:border-blue-300'
-                  }`}
+                  className={`flex items-center p-4 border-2 border-gray-200 rounded-lg transition-colors ${timeExpired ? 'cursor-not-allowed opacity-50' : 'cursor-pointer hover:border-blue-300'
+                    }`}
                 >
                   <input
                     type="radio"
@@ -236,9 +344,8 @@ export default function TakeTestPage() {
               {currentQuestion.question_options.map((option) => (
                 <label
                   key={option.id}
-                  className={`flex items-center p-4 border-2 border-gray-200 rounded-lg transition-colors ${
-                    timeExpired ? 'cursor-not-allowed opacity-50' : 'cursor-pointer hover:border-blue-300'
-                  }`}
+                  className={`flex items-center p-4 border-2 border-gray-200 rounded-lg transition-colors ${timeExpired ? 'cursor-not-allowed opacity-50' : 'cursor-pointer hover:border-blue-300'
+                    }`}
                 >
                   <input
                     type="checkbox"
@@ -269,9 +376,8 @@ export default function TakeTestPage() {
               {currentQuestion.question_options.map((option) => (
                 <label
                   key={option.id}
-                  className={`flex items-center p-4 border-2 border-gray-200 rounded-lg transition-colors ${
-                    timeExpired ? 'cursor-not-allowed opacity-50' : 'cursor-pointer hover:border-blue-300'
-                  }`}
+                  className={`flex items-center p-4 border-2 border-gray-200 rounded-lg transition-colors ${timeExpired ? 'cursor-not-allowed opacity-50' : 'cursor-pointer hover:border-blue-300'
+                    }`}
                 >
                   <input
                     type="radio"
@@ -327,8 +433,15 @@ export default function TakeTestPage() {
       {/* Navigation */}
       <div className="flex justify-between items-center gap-4">
         <button
-          onClick={() => setCurrentQuestionIndex(Math.max(0, currentQuestionIndex - 1))}
-          disabled={currentQuestionIndex === 0 || timeExpired}
+          onClick={async () => {
+            // Save current answer to DB before navigating
+            const currentQ = questions[currentQuestionIndex]
+            if (answers[currentQ.id]) {
+              await saveCurrentAnswerToDb(currentQ.id, answers[currentQ.id])
+            }
+            setCurrentQuestionIndex(Math.max(0, currentQuestionIndex - 1))
+          }}
+          disabled={currentQuestionIndex === 0 || timeExpired || savingToDb}
           className="px-6 py-3 border-2 border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
           Previous
@@ -338,15 +451,21 @@ export default function TakeTestPage() {
           {questions.map((_, index) => (
             <button
               key={index}
-              onClick={() => setCurrentQuestionIndex(index)}
-              disabled={timeExpired}
-              className={`w-10 h-10 rounded-lg font-medium transition-colors ${
-                index === currentQuestionIndex
-                  ? 'bg-blue-600 text-white'
-                  : answers[questions[index].id]
+              onClick={async () => {
+                // Save current answer to DB before navigating
+                const currentQ = questions[currentQuestionIndex]
+                if (answers[currentQ.id]) {
+                  await saveCurrentAnswerToDb(currentQ.id, answers[currentQ.id])
+                }
+                setCurrentQuestionIndex(index)
+              }}
+              disabled={timeExpired || savingToDb}
+              className={`w-10 h-10 rounded-lg font-medium transition-colors ${index === currentQuestionIndex
+                ? 'bg-blue-600 text-white'
+                : answers[questions[index].id]
                   ? 'bg-green-100 text-green-800'
                   : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-              } ${timeExpired ? 'opacity-50 cursor-not-allowed' : ''}`}
+                } ${timeExpired || savingToDb ? 'opacity-50 cursor-not-allowed' : ''}`}
             >
               {index + 1}
             </button>
@@ -363,8 +482,15 @@ export default function TakeTestPage() {
           </button>
         ) : (
           <button
-            onClick={() => setCurrentQuestionIndex(Math.min(questions.length - 1, currentQuestionIndex + 1))}
-            disabled={timeExpired}
+            onClick={async () => {
+              // Save current answer to DB before navigating
+              const currentQ = questions[currentQuestionIndex]
+              if (answers[currentQ.id]) {
+                await saveCurrentAnswerToDb(currentQ.id, answers[currentQ.id])
+              }
+              setCurrentQuestionIndex(Math.min(questions.length - 1, currentQuestionIndex + 1))
+            }}
+            disabled={timeExpired || savingToDb}
             className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             Next

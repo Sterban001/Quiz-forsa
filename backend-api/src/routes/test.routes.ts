@@ -5,6 +5,7 @@ import { createLimiter } from '../middleware/rateLimit.middleware'
 import { parsePaginationParams, getSupabaseRange, paginateResponse } from '../utils/pagination'
 import { validate, validateUuid } from '../middleware/validate.middleware'
 import { createTestSchema, updateTestSchema } from '../validators/test.validator'
+import { sanitizeText } from '../utils/sanitize'
 
 const router = Router()
 
@@ -82,8 +83,11 @@ router.get('/:id', authenticate, validateUuid('id'), async (req: AuthRequest, re
 // Create test (admin only)
 router.post('/', authenticate, requireAdmin, createLimiter, validate(createTestSchema), async (req: AuthRequest, res) => {
   try {
+    // Sanitize user-generated content to prevent XSS
     const testData = {
       ...req.body,
+      title: sanitizeText(req.body.title),
+      description: req.body.description ? sanitizeText(req.body.description) : null,
       created_by: req.user!.id
     }
 
@@ -109,9 +113,14 @@ router.put('/:id', authenticate, requireAdmin, createLimiter, validateUuid('id')
   try {
     const { id } = req.params
 
+    // Sanitize user-generated content to prevent XSS
+    const updateData = { ...req.body }
+    if (updateData.title) updateData.title = sanitizeText(updateData.title)
+    if (updateData.description) updateData.description = sanitizeText(updateData.description)
+
     const { data, error } = await supabaseAdmin
       .from('tests')
-      .update(req.body)
+      .update(updateData)
       .eq('id', id)
       .select()
       .single()

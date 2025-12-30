@@ -34,13 +34,16 @@ app.use(helmet({
     directives: {
       defaultSrc: ["'self'"],
       scriptSrc: ["'self'"],
-      styleSrc: ["'self'", "'unsafe-inline'"],  // unsafe-inline needed for some frameworks
+      styleSrc: ["'self'", "'unsafe-inline'"],  // Keep for now - removing requires CSS refactoring
       imgSrc: ["'self'", "data:", "https://*.supabase.co"],
-      connectSrc: ["'self'", "https://*.supabase.co"],
-      fontSrc: ["'self'", "data:"],
+      connectSrc: ["'self'", "https://*.supabase.co", "https://*.upstash.io"],  // Added Upstash for Redis
+      fontSrc: ["'self'", "data:", "https://fonts.gstatic.com"],  // Added Google Fonts
       objectSrc: ["'none'"],
       mediaSrc: ["'self'"],
       frameSrc: ["'none'"],
+      baseUri: ["'self'"],        // Prevents base tag hijacking
+      formAction: ["'self'"],     // Restricts form submissions
+      upgradeInsecureRequests: [] // Upgrade HTTP to HTTPS
     },
   },
   // Additional security headers
@@ -53,8 +56,18 @@ app.use(helmet({
     action: 'deny'  // Prevent clickjacking
   },
   noSniff: true,  // Prevent MIME type sniffing
-  xssFilter: true  // Enable XSS filter
+  xssFilter: true,  // Enable XSS filter
+  referrerPolicy: {
+    policy: 'strict-origin-when-cross-origin'  // Control referrer information
+  }
 }))
+
+// Additional Security Headers (beyond Helmet defaults)
+app.use((_req, res, next) => {
+  // Permissions Policy - disable sensitive browser features
+  res.setHeader('Permissions-Policy', 'geolocation=(), microphone=(), camera=(), payment=()')
+  next()
+})
 
 // CORS configuration - whitelist specific origins
 const allowedOrigins = process.env.CORS_ORIGIN?.split(',').map(origin => origin.trim()) || [

@@ -138,12 +138,39 @@ element.innerHTML = userInput  // DON'T DO THIS!
    - Blocks inline scripts like `<script>alert('xss')</script>`
    - Only allows scripts from our domain
 
-4. **Input Validation**
+4. **Input Sanitization** (NEW - December 2025)
+   **Location:** `backend-api/src/utils/sanitize.ts`
+   ```typescript
+   import DOMPurify from 'isomorphic-dompurify'
+   
+   export function sanitizeText(dirty: string): string {
+     return DOMPurify.sanitize(dirty, {
+       ALLOWED_TAGS: [],    // No HTML tags allowed
+       ALLOWED_ATTR: []     // No attributes allowed
+     })
+   }
+   ```
+   - Strips ALL HTML from user input before storing in database
+   - Applied to: question prompts, option labels, test titles, descriptions
+   - Even if React escaping fails, data is clean at source
+
+5. **Input Validation (Joi)**
    ```typescript
    const schema = Joi.object({
      title: Joi.string().max(200)  // Length limits prevent large payloads
    })
    ```
+
+6. **Token Format Validation** (NEW - December 2025)
+   **Location:** `student-app/lib/api/client.ts`
+   ```typescript
+   private isValidJwtFormat(token: string): boolean {
+     const jwtRegex = /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/
+     return jwtRegex.test(token)
+   }
+   ```
+   - Validates JWT format before storing in localStorage
+   - Rejects malformed or malicious tokens
 
 ---
 
@@ -199,18 +226,30 @@ app.use(cors({
 **What is CSP?**
 HTTP headers that tell the browser what resources are allowed to load.
 
-**Our Configuration:**
+**Our Configuration (Updated December 2025):**
+**Location:** `backend-api/src/index.ts` (lines 30-65)
 ```typescript
 contentSecurityPolicy: {
   directives: {
-    defaultSrc: ["'self'"],  // Only load resources from our domain
-    scriptSrc: ["'self'"],   // Only run scripts from our domain
-    imgSrc: ["'self'", "https://*.supabase.co"],  // Images from us or Supabase
-    connectSrc: ["'self'", "https://*.supabase.co"],  // API calls to us or Supabase
-    frameSrc: ["'none'"],  // No iframes allowed
+    defaultSrc: ["'self'"],           // Only load resources from our domain
+    scriptSrc: ["'self'"],            // Only run scripts from our domain
+    styleSrc: ["'self'", "'unsafe-inline'"],  // Styles from us (inline needed for frameworks)
+    imgSrc: ["'self'", "data:", "https://*.supabase.co"],  // Images from us or Supabase
+    connectSrc: ["'self'", "https://*.supabase.co", "https://*.upstash.io"],  // API calls
+    fontSrc: ["'self'", "data:", "https://fonts.gstatic.com"],  // Fonts
+    objectSrc: ["'none'"],            // No Flash/plugins
+    frameSrc: ["'none'"],             // No iframes allowed
+    baseUri: ["'self'"],              // Prevents <base> tag hijacking (NEW)
+    formAction: ["'self'"],           // Restricts form submissions (NEW)
+    upgradeInsecureRequests: []        // Forces HTTP → HTTPS (NEW)
   }
 }
 ```
+
+**New CSP Directives Explained:**
+- `baseUri: ["'self'"]` - Prevents attackers from changing the base URL for relative links
+- `formAction: ["'self'"]` - Prevents forms being submitted to external sites
+- `upgradeInsecureRequests` - Automatically upgrades HTTP requests to HTTPS
 
 **Attack Scenarios Prevented:**
 
@@ -322,6 +361,8 @@ eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoiMTIzIiwicm9sZSI6ImFkbWluIn0
 **What is Rate Limiting?**
 Restricting the number of requests a user can make in a time window.
 
+**Location:** `backend-api/src/middleware/rateLimit.middleware.ts`
+
 **Why it matters:**
 
 1. **Brute Force Prevention**
@@ -341,18 +382,30 @@ Restricting the number of requests a user can make in a time window.
 3. **Resource Protection**
    - Expensive operations (like OTP sending) limited
 
-**Our Configuration:**
+**Our Configuration (Updated December 2025):**
 
 ```typescript
 // Login attempts: 5 per 15 minutes per IP
-authLimiter: { max: 5, windowMs: 15 * 60 * 1000 }
+authLimiter: { max: 5, windowMs: 15 * 60 * 1000, skipSuccessfulRequests: true }
 
 // OTP sending: 3 per 15 minutes (prevents SMS spam)
 otpLimiter: { max: 3, windowMs: 15 * 60 * 1000 }
 
-// General API: 100 per 15 minutes
-apiLimiter: { max: 100, windowMs: 15 * 60 * 1000 }
+// General API: 500 per 15 minutes
+apiLimiter: { max: 500, windowMs: 15 * 60 * 1000 }
+
+// Test attempts: 50 per hour PER USER (not per IP!) - NEW
+attemptLimiter: { 
+  max: 50, 
+  windowMs: 60 * 60 * 1000,
+  keyGenerator: (req) => req.user?.id || req.ip  // User-based, not IP-based
+}
 ```
+
+**User-Based Rate Limiting (NEW):**
+- Test attempts are now tracked per authenticated user, not per IP
+- This is fairer for schools/offices with shared IPs
+- 100 students can each take 50 tests/hour from same network
 
 **Response when limit exceeded:**
 ```json
@@ -480,9 +533,10 @@ const testSchema = Joi.object({
 ### ✅ Rate Limiting
 - [x] Login rate limiting (5/15min)
 - [x] OTP rate limiting (3/15min)
-- [x] General API rate limiting (100/15min)
-- [x] Redis-backed (with memory fallback)
-- [x] IP-based tracking
+- [x] General API rate limiting (500/15min)
+- [x] Test attempt limiting (50/hour per USER) - **NEW**
+- [x] Redis-backed via Upstash (production connected)
+- [x] User-based tracking for attempts (fairer than IP-based) - **NEW**
 
 ### ✅ Input Validation
 - [x] Joi validation schemas for all endpoints
@@ -505,7 +559,15 @@ const testSchema = Joi.object({
 - [x] X-Frame-Options: DENY
 - [x] X-Content-Type-Options: nosniff
 - [x] X-XSS-Protection
-- [x] Referrer-Policy
+- [x] Referrer-Policy: strict-origin-when-cross-origin - **NEW**
+- [x] Permissions-Policy: geolocation=(), camera=(), microphone=(), payment=() - **NEW**
+
+### ✅ XSS Protection (NEW - December 2025)
+- [x] Input sanitization with DOMPurify (`backend-api/src/utils/sanitize.ts`)
+- [x] Sanitization on question prompts, options, test titles/descriptions
+- [x] JWT token format validation before localStorage storage
+- [x] Enhanced CSP with baseUri, formAction, upgradeInsecureRequests
+- [x] React auto-escaping (no dangerouslySetInnerHTML used)
 
 ### ✅ Error Handling
 - [x] No stack traces in production
@@ -696,5 +758,21 @@ If you discover a security vulnerability, please email security@yourdomain.com.
 
 ---
 
-**Last Updated**: November 2025
-**Version**: 1.0.0
+## Quick Reference: Security File Locations
+
+| Security Feature | File Location |
+|-----------------|---------------|
+| **CSP & Helmet** | `backend-api/src/index.ts` (lines 30-65) |
+| **CORS Whitelist** | `backend-api/src/index.ts` (lines 70-100) |
+| **Rate Limiting** | `backend-api/src/middleware/rateLimit.middleware.ts` |
+| **Input Sanitization** | `backend-api/src/utils/sanitize.ts` |
+| **Auth Middleware** | `backend-api/src/middleware/auth.middleware.ts` |
+| **Joi Validators** | `backend-api/src/validators/*.ts` |
+| **RLS Policies** | `supabase/migrations/*.sql` |
+| **Token Validation** | `student-app/lib/api/client.ts` (lines 25-40) |
+| **Redis Config** | `backend-api/src/config/redis.ts` |
+
+---
+
+**Last Updated**: December 2025
+**Version**: 2.0.0

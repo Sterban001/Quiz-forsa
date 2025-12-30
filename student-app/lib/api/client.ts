@@ -22,7 +22,22 @@ class ApiClient {
     }
   }
 
+  /**
+   * Validate JWT token format (header.payload.signature)
+   * Prevents storing malformed or malicious tokens
+   */
+  private isValidJwtFormat(token: string): boolean {
+    // JWT format: xxxxx.yyyyy.zzzzz (base64url encoded parts)
+    const jwtRegex = /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/
+    return jwtRegex.test(token)
+  }
+
   setToken(token: string | null) {
+    if (token && !this.isValidJwtFormat(token)) {
+      console.error('Invalid token format - rejecting token')
+      return // Reject invalid tokens
+    }
+
     this.token = token
     if (typeof window !== 'undefined') {
       if (token) {

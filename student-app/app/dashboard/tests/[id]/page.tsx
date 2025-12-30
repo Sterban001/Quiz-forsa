@@ -50,7 +50,11 @@ export default function TestDetailPage() {
 
       if (testAttempts) {
         setPreviousAttempts(testAttempts)
-        setAttemptCount(testAttempts.length)
+        // Only count completed/graded attempts toward max limit
+        const completedAttempts = testAttempts.filter((a: any) =>
+          a.status === 'submitted' || a.status === 'graded'
+        )
+        setAttemptCount(completedAttempts.length)
       }
     } catch (error: any) {
       console.error('Error loading test:', error)
@@ -64,9 +68,17 @@ export default function TestDetailPage() {
     if (!test) return
 
     try {
-      // Create new attempt
-      const attempt = await apiClient.startAttempt(testId)
-      router.push(`/dashboard/tests/${testId}/take?attempt=${attempt.id}`)
+      // Check if there's an in-progress attempt
+      const inProgressAttempt = previousAttempts.find((a: any) => a.status === 'in_progress')
+
+      if (inProgressAttempt) {
+        // Resume existing attempt
+        router.push(`/dashboard/tests/${testId}/take?attempt=${inProgressAttempt.id}`)
+      } else {
+        // Create new attempt
+        const attempt = await apiClient.startAttempt(testId)
+        router.push(`/dashboard/tests/${testId}/take?attempt=${attempt.id}`)
+      }
     } catch (error: any) {
       console.error('Error creating attempt:', error)
       alert(`Failed to start test: ${error.message}`)
@@ -222,14 +234,12 @@ export default function TestDetailPage() {
                   <div className="text-right">
                     {attempt.status === 'completed' && (
                       <>
-                        <div className={`font-semibold ${
-                          attempt.score_percentage >= test.pass_score ? 'text-green-600' : 'text-red-600'
-                        }`}>
+                        <div className={`font-semibold ${attempt.score_percentage >= test.pass_score ? 'text-green-600' : 'text-red-600'
+                          }`}>
                           {attempt.score_percentage}%
                         </div>
-                        <div className={`text-sm ${
-                          attempt.score_percentage >= test.pass_score ? 'text-green-600' : 'text-red-600'
-                        }`}>
+                        <div className={`text-sm ${attempt.score_percentage >= test.pass_score ? 'text-green-600' : 'text-red-600'
+                          }`}>
                           {attempt.score_percentage >= test.pass_score ? 'Passed' : 'Failed'}
                         </div>
                       </>
@@ -245,12 +255,14 @@ export default function TestDetailPage() {
         )}
 
         <div className="border-t border-gray-200 pt-6">
-          {canAttempt ? (
+          {canAttempt || previousAttempts.some((a: any) => a.status === 'in_progress') ? (
             <button
               onClick={handleStartTest}
               className="w-full bg-blue-600 hover:bg-blue-700 text-white py-4 px-6 rounded-lg font-semibold text-lg transition-colors"
             >
-              Start Test
+              {previousAttempts.some((a: any) => a.status === 'in_progress')
+                ? 'Resume Test'
+                : 'Start Test'}
             </button>
           ) : (
             <div className="bg-gray-100 text-gray-600 py-4 px-6 rounded-lg text-center">
