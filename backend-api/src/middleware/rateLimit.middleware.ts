@@ -117,9 +117,13 @@ export const attemptLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   // Use authenticated user ID instead of IP address
-  keyGenerator: (req) => {
+  keyGenerator: async (req, res) => {
     // @ts-expect-error - user is added by auth middleware
-    return req.user?.id || req.ip || 'anonymous'
+    if (req.user?.id) {
+      return req.user.id
+    }
+    // Properly get IP address using the async method
+    return await rateLimit.getIP(req, res) || 'anonymous'
   },
   store: isRedisAvailable()
     ? new RedisStore({
