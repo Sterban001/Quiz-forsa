@@ -3,7 +3,6 @@ import { supabase, supabaseAdmin } from '../config/supabase'
 import { authenticate, requireAdmin, AuthRequest } from '../middleware/auth.middleware'
 import { validate, validateUuid } from '../middleware/validate.middleware'
 import { createQuestionSchema, updateQuestionSchema } from '../validators/question.validator'
-import { sanitizeText } from '../utils/sanitize'
 
 const router = Router()
 
@@ -34,12 +33,6 @@ router.post('/', authenticate, requireAdmin, validate(createQuestionSchema), asy
   try {
     const { options, ...questionData } = req.body
 
-    // Sanitize user-generated content to prevent XSS
-    questionData.prompt = sanitizeText(questionData.prompt)
-    if (questionData.explanation) {
-      questionData.explanation = sanitizeText(questionData.explanation)
-    }
-
     const { data: question, error: questionError } = await supabaseAdmin
       .from('questions')
       .insert(questionData)
@@ -50,10 +43,8 @@ router.post('/', authenticate, requireAdmin, validate(createQuestionSchema), asy
 
     // Insert options if provided
     if (options && options.length > 0) {
-      // Sanitize each option label
       const optionsData = options.map((opt: any) => ({
         ...opt,
-        label: sanitizeText(opt.label),
         question_id: question.id
       }))
 
@@ -86,14 +77,6 @@ router.put('/:id', authenticate, requireAdmin, validateUuid('id'), validate(upda
     const { id } = req.params
     const { options, ...questionData } = req.body
 
-    // Sanitize user-generated content to prevent XSS
-    if (questionData.prompt) {
-      questionData.prompt = sanitizeText(questionData.prompt)
-    }
-    if (questionData.explanation) {
-      questionData.explanation = sanitizeText(questionData.explanation)
-    }
-
     const { error: questionError } = await supabaseAdmin
       .from('questions')
       .update(questionData)
@@ -113,10 +96,8 @@ router.put('/:id', authenticate, requireAdmin, validateUuid('id'), validate(upda
 
       // Insert new options
       if (options.length > 0) {
-        // Sanitize each option label
         const optionsData = options.map((opt: any) => ({
           ...opt,
-          label: sanitizeText(opt.label),
           question_id: id
         }))
 
